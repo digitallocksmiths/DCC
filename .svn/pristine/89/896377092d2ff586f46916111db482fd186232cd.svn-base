@@ -1,0 +1,51 @@
+// # ---------------------------------------------------------------------------------------------
+// #  $URL$
+// # ---------------------------------------------------------------------------------------------
+// #  File:                  $Id$
+// #  Last committed:  $Revision$
+// # ---------------------------------------------------------------------------------------------
+
+// Title: Console.h
+// 
+//  Implementation details.
+//
+//
+
+#ifndef __CONSOLE_H__
+#define __CONSOLE_H__
+
+#ifdef DEBUG_INCLUDE_FILES 
+#pragma message("     including " __FILE__)
+#endif // DEBUG_INCLUDE_FILES
+
+
+#ifdef __cplusplus
+extern "C" {
+#endif
+
+
+#define CON_BLACK       0
+#define CON_BLUE        1
+#define CON_GREEN       2
+#define CON_CYAN        3
+#define CON_RED         4
+#define CON_MAGENTA     5
+#define CON_YELLOW      6
+#define CON_WHITE       7
+#define CON_BRIGHT      8
+
+    extern BOOL     ConsoleClearScreen(void);
+    extern void     ConsoleSetColour(int a);
+    extern int      ConsolePrintf( int iColour, const char *pbFormat, ...);
+
+#ifdef __cplusplus
+}
+#endif
+
+#endif // __CONSOLE_H__
+
+/* eof */
+
+
+
+

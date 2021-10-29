@@ -1,0 +1,30 @@
+﻿  TypeCtrl.c
+  Expr.c
+  ResultingType: calculate result of combination.
+  Optimize Add
+  Optimize Sub
+  Optimize Mul
+  Optimize Div
+  Optimize Mod
+  Optimize And
+  Optimize Or
+  Optimize Xor
+  Optimize >>
+  Optimize <<
+  Comparisons need to note the sign
+  Optimize ==
+  Comparisons need to note the sign
+  Optimize !=
+  Comparisons need to note the sign
+  Optimize <
+  Comparisons need to note the sign
+  Optimize <=
+  Comparisons need to note the sign
+  Optimize >
+  Comparisons need to note the sign
+  Optimize >=
+  Optimize &&
+  Optimize ||
+  Generating Code...
+  CC_Avr.vcxproj -> D:\DL\sean\RoyalHolloway\2019\CC_Avr\Debug\CC_Avr.exe
+  CC_Avr.vcxproj -> D:\DL\sean\RoyalHolloway\2019\CC_Avr\Debug\CC_Avr.pdb (Full PDB)

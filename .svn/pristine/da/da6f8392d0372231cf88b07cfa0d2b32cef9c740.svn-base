@@ -1,0 +1,222 @@
+
+#define _CRT_SECURE_NO_WARNINGS
+
+#include <stdio.h>
+#include <Windows.h>
+
+#include "Utilities\Console.h"
+
+#include "lex.h"
+#include "typectrl.h"
+//#include "expr.h"
+//#include "Gen.h"
+#include "Statements.h"
+#include "main.h"
+
+
+#ifdef _DEBUG
+
+void        StatementPrint(int iDepth, TPStatement pStat, BOOL fNext) {
+    
+    if (pStat == NULL) {
+        return;
+    }
+    do {
+        ConsoleIndent(iDepth);
+        if (pStat->pszLabel) {
+            printf("%s: ", pStat->pszLabel);
+        }
+        switch (pStat->Usage) {
+        case    StatementCOMPOUND:
+            printf("COMPOUND {\n");
+            StatementPrint(iDepth + 1, pStat->Use._compound.pStatement, TRUE);
+            ConsoleIndent(iDepth); printf("COMPOUND_END }\n");
+            break;
+
+        case    StatementRETURN:
+            printf("RETURN %s\n", (pStat->Use._return.pExpr) ? "something" : "void");
+            break;
+
+        case    StatementIF:
+            printf("IF (%s) THEN\n", (pStat->Use._if.pCond) ? "something" : "void");
+            StatementPrint(iDepth + 1, pStat->Use._if.pYes, TRUE);
+            if (pStat->Use._if.pNo) {
+                ConsoleIndent(iDepth); printf("ELSE\n");
+                StatementPrint(iDepth + 1, pStat->Use._if.pNo, TRUE);
+            }
+            ConsoleIndent(iDepth); printf("IF_END\n");
+            break;
+
+        case    StatementWHILE:
+            printf("WHILE (%s) DO\n", (pStat->Use._while.pCond) ? "something" : "void");
+            if (pStat->Use._while.pAction) {
+                StatementPrint(iDepth + 1, pStat->Use._while.pAction, TRUE);
+            }
+            ConsoleIndent(iDepth); printf("WHILE_END\n");
+            break;
+
+        case    StatementDO:
+            printf("DO\n");
+            if (pStat->Use._do.pAction) {
+                StatementPrint(iDepth + 1, pStat->Use._do.pAction, TRUE);
+            }
+            ConsoleIndent(iDepth+1); printf("while condition (%s)\n", (pStat->Use._do.pCond) ? "something" : "void");
+            ConsoleIndent(iDepth); printf("DO_END\n");
+            break;
+
+        case    StatementFOR:
+            printf("FOR\n");
+            ConsoleIndent(iDepth + 1); printf("Init      (%s)\n", (pStat->Use._for.pInit)   ? "something" : "void");
+            ConsoleIndent(iDepth + 1); printf("Condition (%s)\n", (pStat->Use._for.pCond)   ? "something" : "void");
+            if (pStat->Use._for.pAction) {
+                StatementPrint(iDepth + 2, pStat->Use._for.pAction, TRUE);
+            }
+            ConsoleIndent(iDepth + 1); printf("Repeat    (%s)\n", (pStat->Use._for.pRepeat) ? "something" : "void");
+
+            ConsoleIndent(iDepth); printf("FOR_END\n");
+            break;
+
+        case    StatementEXPR:
+            printf("EXPRESSION (%s)\n", (pStat->Use._expr.pExpr) ? "something" : "void");
+            break;
+
+        case    StatementBREAK:
+            printf("BREAK\n");
+            break;
+
+        case    StatementCONTINUE:
+            printf("CONTINUE\n");
+            break;
+
+        case    StatementGOTO:
+            printf("GOTO '%s'\n", pStat->Use._goto.pszLabel);
+            break;
+
+        case    StatementSWITCH:
+            printf("SWITCH (%s)\n", (pStat->Use._switch.pExpr) ? "something" : "void");
+            if (pStat->Use._switch.pBody) {
+                StatementPrint(iDepth + 1, pStat->Use._switch.pBody, TRUE);
+            }
+            ConsoleIndent(iDepth); printf("SWITCH_END\n");
+            break;
+
+        case    StatementCASE:
+            printf("CASE '%s'\n", (pStat->Use._case.pExpr) ? "something" : "void");
+            break;
+
+        default: Error(FATAL, "StatementPrint(): unknown statement usage");
+        }
+        pStat = pStat->pNext;
+    } while (fNext && pStat);
+}
+#endif // _DEBUG
+
+
+static TPStatement
+NewStatement(TStatementTypes Use) {
+    TPStatement NewStatment;
+    NewStatment = New(sizeof(TStatement));
+    NewStatment->Usage = Use;
+    NewStatment->pNext = NULL;
+    return NewStatment;
+}
+
+TPStatement StatementAppend(TPStatement pList, TPStatement pStat) {                     // add new statement to the end of the list
+    TPStatement pL = pList;
+    if (pList == NULL) {
+        return pStat;
+    }
+    while (pList->pNext != NULL) {
+        pList = pList->pNext;
+    }
+    pList->pNext = pStat;
+    return pL;
+}
+
+
+TPStatement StatementMakeCompound(TPDeclSpec pDeclList, TPStatement pStat) {
+    TPStatement pS = NewStatement(StatementCOMPOUND);
+    //pS->Use._compound.pDeclList = pDeclList;
+    pS->Use._compound.pStatement = pStat;
+    return pS;
+}
+
+TPStatement StatementMakeReturn(TPExprNode pExpr) {
+    TPStatement pS = NewStatement(StatementRETURN);
+    pS->Use._return.pExpr = pExpr;
+    return pS;
+}
+
+TPStatement StatementMakeIf(TPExprNode pCond, TPStatement pYes, TPStatement pNo) {
+    TPStatement pS = NewStatement(StatementIF);
+    pS->Use._if.pCond = pCond;
+    pS->Use._if.pYes = pYes;
+    pS->Use._if.pNo = pNo;
+    return pS;
+}
+
+TPStatement StatementMakeWhile(TPExprNode pCond, TPStatement pAction) {
+    TPStatement pS = NewStatement(StatementWHILE);
+    pS->Use._while.pCond = pCond;
+    pS->Use._while.pAction = pAction;
+    return pS;
+}
+
+TPStatement StatementMakeDo(TPStatement pAction, TPExprNode pCond) {
+    TPStatement pS = NewStatement(StatementDO);
+    pS->Use._do.pAction = pAction;
+    pS->Use._do.pCond = pCond;
+    return pS;
+}
+TPStatement StatementMakeFor(TPExprNode  pInit, TPExprNode pCond, TPExprNode pRepeat, TPStatement pAction) {
+    TPStatement pS = NewStatement(StatementFOR);
+    pS->Use._for.pInit = pInit;
+    pS->Use._for.pCond = pCond;
+    pS->Use._for.pRepeat = pRepeat;
+    pS->Use._for.pAction = pAction;
+    return pS;
+}
+
+TPStatement StatementMakeExpression(TPExprNode  pExpr) {
+    TPStatement pS = NewStatement(StatementEXPR);
+    pS->Use._expr.pExpr = pExpr;
+    return pS;
+
+}
+
+TPStatement StatementMakeBreak(void) {
+    return NewStatement(StatementBREAK);
+}
+
+TPStatement StatementMakeContinue(void) {
+    return NewStatement(StatementCONTINUE);
+}
+
+TPStatement StatementMakeGoto(LPSTR pszLabel) {
+    TPStatement pS = NewStatement(StatementGOTO);
+    pS->Use._goto.pszLabel = pszLabel;
+    return pS;
+}
+
+TPStatement StatementMakeSwitch(TPExprNode  pExpr, TPStatement pBody) {
+    TPStatement pS = NewStatement(StatementSWITCH);
+    pS->Use._switch.pExpr = pExpr;
+    pS->Use._switch.pBody = pBody;
+    return pS;
+}
+
+TPStatement StatementMakeCase(TPExprNode  pConst, TPStatement pStat) {
+    TPStatement pS = NewStatement(StatementCASE);
+    pS->pNext = pStat;
+    pS->Use._case.pExpr = pConst;
+    return pS;
+}
+
+
+TPStatement StatementAddLabel(LPSTR pszLabel, TPStatement pStat) {
+    pStat->pszLabel = pszLabel;
+    return pStat;
+}
+
+
+/* eof */

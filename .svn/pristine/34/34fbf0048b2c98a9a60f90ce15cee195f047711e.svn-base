@@ -1,0 +1,258 @@
+// # $URL: https://eboracum-vss.digitallocksmiths.local/svn/Dls/Sean/RoyalHolloway/CC_Avr/Source/GenExpression.c $
+// # $Revision: 391 $
+
+
+
+#define _CRT_SECURE_NO_WARNINGS
+
+#include <stdio.h>
+#include <ctype.h>
+#include <signal.h>
+#include <setjmp.h>
+#include <stdlib.h>
+#include <memory.h>
+#include <string.h>
+#include <limits.h>
+#include <float.h>
+#include <Windows.h>
+
+//#include <ext\types.h>
+#include "Utilities\Console.h"
+
+//#include "lex.h"
+#include "typectrl.h"
+#include "expr.h"
+//#include "ExprOptimize.h"
+#include "gen.h"
+#include "main.h"
+//#include "C_Yacced.tab.h"
+#include "GenAsm.h"
+//#include "GenStatements.h"
+#include "GenMemAccess.h"
+
+
+
+// ##########################################################################
+// #  Function: FetchOptions
+// #        Fetch what's at the pointer experession
+// #
+// #
+// #  Parameters:
+// #        <todo: params >
+// #
+// #  Returns:
+// #        <todo: return Value>
+// #
+// #  See Also:
+// #
+// ##########################################################################
+int FetchOptions(int iReg, TPExprNode pExpr, LPSTR * ppszVar, int * piDisplacement) {
+
+#pragma message("    **** consider when target is constant to generate LPM compatible response ACCESS_ROM")
+
+//    ASSERT(iReg == REG_ACC);
+
+    if (pExpr->Usage == uVar) {                                                                 // Read from variable
+        if (pExpr->Use.Var.pDecId == NULL) {                                                    // Z := &Var (global)
+            *ppszVar = pExpr->Use.Var.pszIdentifier;                                            //
+            *piDisplacement = 0;                                                                //
+            return ACCESS_GLOBAL;                                                               //
+        }                                                                                       
+        else {                                                                                  // Y + disp = Frame var
+            *ppszVar = pExpr->Use.Var.pszIdentifier;                                            //
+            *piDisplacement = (int)pExpr->Use.Var.pDecId->Use.DecId.iOffset;                    //
+            return ACCESS_FRAME;                                                                //
+        }                                                                                       //
+    }
+    else if ((pExpr->Usage == uUnary) && (pExpr->Use.Unary.Op == unPtr)) {                      // Read from Pointer
+        TPExprNode pN = pExpr->Use.Unary.pOperand;                                              //
+
+        ASSERT(pN->pType->Usage == DecPtr);
+        TPDeclSpec pTarget = pN->pType->Use.DecPtr.pTarget;                                                         // type of target.
+
+        if ((pN->Usage == uBinary) && (pN->Use.Binary.Op == binAdd)) {                                              // very common structure for array lookup is Add(addr,offset)
+            TPExprNode pAddLeft = pN->Use.Binary.pLeft;                                                             //
+            TPExprNode pAddRight = pN->Use.Binary.pRight;                                                           //
+
+            if (pAddRight->Usage == uConst) {                                                                       // if the right is constant we can use displaced index 
+                int iOff = (int)pAddRight->Use.Const.lInteger;                                                      //
+
+                if ((pAddLeft->Usage == uUnary) &&                                                                  // if Left is the address of a global variable
+                    (pAddLeft->Use.Unary.Op == unAddr) &&                                                           //
+                    (pAddLeft->Use.Unary.pOperand->Usage == uVar)) {                                                // 
+                    *ppszVar = pAddLeft->Use.Unary.pOperand->Use.Var.pszIdentifier;                                 //      use its name with the povided offset.
+                    if (pAddLeft->Use.Unary.pOperand->Use.Var.pDecId == NULL) {                                     //
+                        *ppszVar = pAddLeft->Use.Unary.pOperand->Use.Var.pszIdentifier;                             //      use its name with the povided offset.
+                        *piDisplacement = iOff;                                                                     //
+                        return ACCESS_GLOBAL;                                                                       //
+                    }                                                                                               //
+                    else {                                                                                          //
+                        *piDisplacement = pAddLeft->Use.Unary.pOperand->Use.Var.pDecId->Use.DecId.iOffset + iOff;   //
+                        return ACCESS_FRAME;                                                                        //
+                    }                                                                                               //
+                }
+
+                if (_GenCostOfCalculation(pAddLeft) < 2) {                                                          // Calc the address.
+                    _GenExpr(30, pAddLeft);                                                                         //      if it's simple we load directly to Z
+                }                                                                                                   //
+                else {                                                                                              // 
+                    _GenExpr(iReg, pAddLeft);                                                                       //      requires arithmetic so do it  
+                    GenAsm("", "movw", OperandRegReg(30, REG_ACC0), "  1: pointer base");                           //       and move it to Z
+                }                                                                                                   //
+
+                if ((iOff < 0) || (63 < iOff) || IsTypeQualifierConst(pTarget)) {                                   // if the displacement will be illegal 
+                    GenAsm("", "adiw", OperandRegImmediate(30, iOff), "  2: displaced");                            //      add it to Z and 
+                    iOff = 0;                                                                                       //      make it zero.
+                }
+
+                *piDisplacement = iOff;                                                                             // Tell the caller what the displacement is
+                return ACCESS_POINTER;                                                                              // Also that it's a Z indexed access.
+            }
+        }
+
+        // un-optimized general case
+        _GenExpr(iReg, pExpr);                                                                                      // Calc descendant. gives address in ACC
+        GenAsm("", "movw", OperandRegReg(30, REG_ACC0),          "  1: de-ref pointer");                            //
+        *piDisplacement = 0;                                                                                        // Tell the caller what the displacement is
+        return ACCESS_POINTER;                                                                                      // Also that it's a Z indexed access.
+    }
+
+
+    // un-optimized general case
+    _GenExpr(iReg, pExpr);                                                                                      // Calc descendant. gives address in ACC
+    GenAsm("", "movw", OperandRegReg(30, REG_ACC0), "  1: de-ref pointer");                            //
+    *piDisplacement = 0;                                                                                        // Tell the caller what the displacement is
+    return ACCESS_POINTER;                                                                                      // Also that it's a Z indexed access.
+
+}
+
+
+// ##########################################################################
+// #  Function: FetchLoad
+// #        Fetch according to the recipie from <FetchOptions>()
+// #
+// #
+// #  Parameters:
+// #        <todo: params >
+// #
+// #  Returns:
+// #        <todo: return Value>
+// #
+// #  See Also:
+// #
+// ##########################################################################
+void FetchLoad(int Z, int iReg, int iVarSize, LPSTR pszMem, int iDisp) {
+
+    switch (Z) {                                                                                                            // Fetch
+    case ACCESS_GLOBAL:                                                                                                     // Variable
+        if (iDisp == 0) {                                                                                                   //
+            GenAsm("", "lds", OperandRegStr(iReg + REG_ORDER0, pszMem), CommentString(1, " reg <== ", pszMem));             //
+        }                                                                                                                   //
+        else {                                                                                                              //
+            GenAsm("", "lds", OperandRegStrDisp(iReg + REG_ORDER0, pszMem, iDisp), CommentString(1, "reg <== ", pszMem));   //
+        }                                                                                                                   //
+        if (iVarSize < 2) break;                                                                                            //
+        GenAsm("", "lds", OperandRegStrDisp(iReg + REG_ORDER1, pszMem, iDisp + 1), "  1:");                                 //
+        if (iVarSize < 4) break;                                                                                            //
+        GenAsm("", "lds", OperandRegStrDisp(iReg + REG_ORDER2, pszMem, iDisp + 2), "  1:");                                 //
+        GenAsm("", "lds", OperandRegStrDisp(iReg + REG_ORDER3, pszMem, iDisp + 3), "  1:");                                 //
+        break;
+    case ACCESS_FRAME:                                                                                                      // Local (offset y)
+        if (iDisp == 0) {                                                                                                   //
+            GenAsm("", "ld", OperandRegStr(iReg + REG_ORDER0, "Y"), CommentString(1, "reg <= local ", pszMem));             //
+        }                                                                                                                   //
+        else {                                                                                                              //
+            GenAsm("", "ldd", OperandRegDisp(iReg + REG_ORDER0, "Y", iDisp), CommentString(2, "reg <= local ", pszMem));    //
+        }                                                                                                                   //
+        if (iVarSize < 2) break;                                                                                            //
+        GenAsm("", "ldd", OperandRegDisp(iReg + REG_ORDER1, "Y", iDisp + 1), "  2:");                                       //
+        if (iVarSize < 4) break;                                                                                            //
+        GenAsm("", "ldd", OperandRegDisp(iReg + REG_ORDER2, "Y", iDisp + 2), "  2:");                                       //
+        GenAsm("", "ldd", OperandRegDisp(iReg + REG_ORDER3, "Y", iDisp + 3), "  2:");                                       //
+        break;
+    case ACCESS_POINTER:                                                                                                    // pointer (offset Z)
+        if (iDisp == 0) {                                                                                                   //
+            GenAsm("", "ldd", OperandRegStr(iReg + REG_ORDER0, "Z"), "  1: reg <== @Z");                                    //
+        }                                                                                                                   //
+        else {                                                                                                              //
+            GenAsm("", "ldd", OperandRegDisp(iReg + REG_ORDER0, "Z", iDisp), "  2: reg <== @Z");                            //
+        }                                                                                                                   //
+        if (iVarSize < 2) break;                                                                                            //
+        GenAsm("", "ldd", OperandRegDisp(iReg + REG_ORDER1, "Z", iDisp + 1), "  2:");                                       //
+        if (iVarSize < 4) break;                                                                                            //
+        GenAsm("", "ldd", OperandRegDisp(iReg + REG_ORDER2, "Z", iDisp + 2), "  2:");                                       //
+        GenAsm("", "ldd", OperandRegDisp(iReg + REG_ORDER3, "Z", iDisp + 3), "  2:");                                       //
+        break;
+    
+    case ACCESS_REG: // unsupported
+    default:
+        ASSERT(0);
+    }
+}
+
+// ##########################################################################
+// #  Function: FetchStore
+// #        Fetch according to the recipie from <FetchOptions>()
+// #
+// #
+// #  Parameters:
+// #        <todo: params >
+// #
+// #  Returns:
+// #        <todo: return Value>
+// #
+// #  See Also:
+// #
+// ##########################################################################
+void FetchStore(int Z, int iReg, int iVarSize, LPSTR pszMem, int iDisp) {
+    switch (Z) {                                                                                                            // Write back
+    case ACCESS_GLOBAL:                                                                                                     // Variable
+        if (iDisp == 0) {                                                                                                   //
+            GenAsm("", "sts", OperandStrReg(pszMem, iReg + REG_ORDER0), CommentString(1, pszMem, " <== reg "));             //
+        }                                                                                                                   //
+        else {                                                                                                              //
+            GenAsm("", "sts", OperandStrDispReg(pszMem, iDisp, iReg + REG_ORDER0), CommentString(1, pszMem, " <== reg "));  //
+        }                                                                                                                   //
+        if (iVarSize < 2) break;                                                                                            //
+        GenAsm("", "sts", OperandStrDispReg(pszMem, iDisp + 1, iReg + REG_ORDER1), "  1:");                                 //
+        if (iVarSize < 4) break;                                                                                            //
+        GenAsm("", "sts", OperandStrDispReg(pszMem, iDisp + 2, iReg + REG_ORDER2), "  1:");                                 //
+        GenAsm("", "sts", OperandStrDispReg(pszMem, iDisp + 3, iReg + REG_ORDER3), "  1:");                                 //
+        break;
+    case ACCESS_FRAME:                                                                                                      // Local (offset y)
+        if (iDisp == 0) {                                                                                                   //
+            GenAsm("", "st", OperandStrReg("Y", iReg + REG_ORDER0), CommentString(1, " local <== reg ", pszMem));           //
+        }                                                                                                                   //
+        else {                                                                                                              //
+            GenAsm("", "std", OperandDispReg("Y", iDisp, iReg + REG_ORDER0), CommentString(2, " local <== reg ", pszMem));  //
+        }                                                                                                                   //
+        if (iVarSize < 2) break;                                                                                            //
+        GenAsm("", "std", OperandDispReg("Y", iDisp + 1, iReg + REG_ORDER1), "  2:");                                       //
+        if (iVarSize < 4) break;                                                                                            //
+        GenAsm("", "std", OperandDispReg("Y", iDisp + 2, iReg + REG_ORDER2), "  2:");                                       //
+        GenAsm("", "std", OperandDispReg("Y", iDisp + 3, iReg + REG_ORDER3), "  2:");                                       //
+        break;
+    case ACCESS_POINTER:                                                                                                    // pointer (offset Z)
+        if (iDisp == 0) {                                                                                                   //
+            GenAsm("", "st", OperandStrReg("Z", iReg + REG_ORDER0), "  1: @Z <== reg");                                     //
+        }                                                                                                                   //
+        else {                                                                                                              //
+            GenAsm("", "std", OperandDispReg("Z", iDisp, iReg + REG_ORDER0), "  2: @Z <== reg");                            //
+        }                                                                                                                   //
+        if (iVarSize < 2) break;                                                                                            //
+        GenAsm("", "std", OperandDispReg("Z", iDisp + 1, iReg + REG_ORDER1), "  2:");                                       //
+        if (iVarSize < 4) break;                                                                                            //
+        GenAsm("", "std", OperandDispReg("Z", iDisp + 2, iReg + REG_ORDER2), "  2:");                                       //
+        GenAsm("", "std", OperandDispReg("Z", iDisp + 3, iReg + REG_ORDER3), "  2:");                                       //
+        break;
+
+    case ACCESS_REG:
+    default:
+        ASSERT(0);
+    }
+
+}
+
+
+/* eof */
+

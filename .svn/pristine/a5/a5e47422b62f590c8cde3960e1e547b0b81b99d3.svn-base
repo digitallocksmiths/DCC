@@ -1,0 +1,162 @@
+// # $URL: https://eboracum-vss.digitallocksmiths.local/svn/Dls/Sean/RoyalHolloway/CC_Avr/Source/GenExpression.c $
+// # $Revision: 391 $
+
+
+#define _CRT_SECURE_NO_WARNINGS
+
+#include <stdio.h>
+#include <ctype.h>
+#include <signal.h>
+#include <setjmp.h>
+#include <stdlib.h>
+#include <memory.h>
+#include <string.h>
+#include <limits.h>
+#include <float.h>
+#include <Windows.h>
+
+//#include <ext\types.h>
+#include "Utilities\Console.h"
+
+//#include "lex.h"
+#include "typectrl.h"
+#include "expr.h"
+//#include "ExprOptimize.h"
+#include "gen.h"
+#include "main.h"
+//#include "C_Yacced.tab.h"
+
+#include "GenAsm.h"
+
+
+//static FILE *hGlbOut;
+
+
+// ############################################################################################
+LPSTR OperandImmediateImmediate(unsigned char bV1, unsigned char bV2) {
+    static char caRegVal[16];
+    sprintf_s(caRegVal, sizeof(caRegVal), "0x%02x, 0x%02x", bV1, bV2);
+    return caRegVal;
+}
+
+LPSTR OperandRegImmediate(int iR1, unsigned char bVal) {
+    static char caRegVal[16];
+    sprintf_s(caRegVal, sizeof(caRegVal), "r%d, 0x%02x", iR1, bVal);
+    return caRegVal;
+}
+
+LPSTR OperandImmediateReg(unsigned char bVal, int iR1) {
+    static char caRegVal[16];
+    sprintf_s(caRegVal, sizeof(caRegVal), "0x%02x, r%d", bVal, iR1);
+    return caRegVal;
+}
+
+LPSTR OperandRegVar(int iR1, LPSTR pszVar) {
+    static char caRegStr[256];
+    if ((iR1 & 0x01) == 0) {
+        sprintf_s(caRegStr, sizeof(caRegStr), "r%d, lo8(%s)", iR1, pszVar);
+    }
+    else {
+        sprintf_s(caRegStr, sizeof(caRegStr), "r%d, hi8(%s)", iR1, pszVar);
+    }
+    return caRegStr;
+}
+
+LPSTR OperandRegStr(int iR1, LPSTR pszStr) {
+    static char caRegVal[128];
+    sprintf_s(caRegVal, sizeof(caRegVal), "r%d, %s", iR1, pszStr);
+    return caRegVal;
+}
+
+LPSTR OperandRegStrDisp(int iR1, LPSTR pszStr, int iDisp) {
+    static char caRegVal[128];
+    sprintf_s(caRegVal, sizeof(caRegVal), "r%d, %s+%d", iR1, pszStr, iDisp);
+    return caRegVal;
+}
+
+LPSTR OperandStrReg(LPSTR pszStr, int iR1) {
+    static char caRegVal[128];
+    sprintf_s(caRegVal, sizeof(caRegVal), "%s, r%d", pszStr, iR1);
+    return caRegVal;
+}
+
+LPSTR OperandStrDispReg(LPSTR pszStr, int iDisp, int iR1) {
+    static char caRegVal[128];
+    sprintf_s(caRegVal, sizeof(caRegVal), "%s+%d, r%d", pszStr, iDisp, iR1);
+    return caRegVal;
+}
+
+LPSTR OperandRegDisp(int iR1, LPSTR pszStr, int iDisp) {
+    static char caRegVal[128];
+    if (iDisp > 63) {
+        Error(ERRORX, "OperandRegDisp(): Local variable displacment is > 64. No can do.");
+    }
+    sprintf_s(caRegVal, sizeof(caRegVal), "r%d, %s+%d", iR1, pszStr, iDisp);
+    return caRegVal;
+}
+
+LPSTR OperandDispReg(LPSTR pszStr, int iDisp, int iR1) {
+    static char caValReg[128];
+    if (iDisp > 63) {
+        Error(ERRORX, "OperandDispReg(): Local variable displacment is > 64. No can do.");
+    }
+    sprintf_s(caValReg, sizeof(caValReg), "%s+%d, r%d", pszStr, iDisp, iR1);
+    return caValReg;
+}
+
+LPSTR OperandReg(int iR) {
+    static char caRegPair[128];
+    sprintf_s(caRegPair, sizeof(caRegPair), "r%d", iR);
+    return caRegPair;
+}
+
+LPSTR OperandRegReg(int iR1, int iR2) {
+    static char caRegReg[128];
+    sprintf_s(caRegReg, sizeof(caRegReg), "r%d, r%d", iR1, iR2);
+    return caRegReg;
+}
+
+
+LPSTR OperandFreeform(LPSTR pszF, ...) {
+    static char caRegReg[128];
+    va_list ArgList;
+    va_start(ArgList, pszF);
+    _vsnprintf_s(caRegReg, sizeof(caRegReg), _TRUNCATE, pszF, ArgList);
+    return caRegReg;
+}
+
+
+
+
+
+LPSTR CommentNumber(int iCycles, LPSTR pszT, long lValue) {
+    static char caComment[256];
+    if (iCycles == 0) {
+        sprintf_s(caComment, sizeof(caComment), "   : %s%ld", pszT, lValue);
+    }
+    else {
+        sprintf_s(caComment, sizeof(caComment), "%3d: %s%ld", iCycles, pszT, lValue);
+    }
+    return caComment; 
+}
+
+LPSTR CommentString(int iCycles, LPSTR pszT, LPSTR pszM) {
+    static char caComment[256];
+    if (iCycles == 0) {
+        sprintf_s(caComment, sizeof(caComment), "   : %s%s", pszT, pszM);
+    }
+    else {
+        sprintf_s(caComment, sizeof(caComment), "%3d: %s%s", iCycles, pszT, pszM);
+    }
+    return caComment;
+}
+ 
+void GenAsm(LPSTR pszLabel, LPSTR pszOpcode, LPSTR pszOperand, LPSTR pszComment) {
+    GenAsmOut(pszLabel, pszOpcode, pszOperand, pszComment, TRUE, FALSE);           // always to the same file and always needs NL and it's non global.
+}
+
+
+// #################################################################################################
+
+/* eof */
+

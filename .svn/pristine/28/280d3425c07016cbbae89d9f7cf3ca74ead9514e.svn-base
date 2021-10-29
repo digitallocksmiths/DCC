@@ -1,0 +1,262 @@
+; SKC AVR Output - V1(Jan  4 2020)
+
+#define		_IO_SPL	0x3D
+#define		_IO_SPH	0x3E
+
+                                                            ; ##########################
+                                                            ; # Start of CONST segment #
+                     .section    CONST, "a"                 ; ##########################
+                     ;.endseg                               ; === End of CONST segment ===
+
+
+                                                            ; #########################
+                                                            ; # Start of INIT segment #
+                     .section    INIT,  "a"                 ; #########################
+                                                            ; This is the source of the initialization data
+                                                            ; #########################
+                     .section    .data                      ; # Start of DATA segment #
+                                                            ; #########################
+                                                            ; This is where the initialization data will be copied to
+                     ;.endseg                               ; === End of DATA segment ===
+
+
+                                                            ; ########################
+                     .section    .bss                       ; # Start of BSS segment #
+                                                            ; ########################
+                                                            ; Here starts the uninitialized data
+                     ;.endseg                               ; === End of BSS segment ===
+
+
+                                                            ; #########################
+                     .section    .text                      ; # Start of TEXT segment #
+                                                            ; #########################
+                                                            ; Here starts the executable code
+
+                     .global   Castings
+Castings:            ; ###########################################
+                     ; # Function: Castings                 
+                     ; #   Return: void                     
+                     ; #   Params: <none>                   
+                     ; #   CPU   : @Y+6, Return Address     
+                     ; #         : @Y+4, Preserved Frame Pointer
+                     ; #   Locals: @Y+3  , c  size=1 char , Class[_____]
+                     ; #         : @Y+1  , s  size=2 short , Class[_____]
+                     ; #         : sizeof(locals) = 3       
+                     ; ###########################################
+                     ; #### frame setup #########           ; 
+                     push      r29                          ;   2: (YH) preserve Frame
+                     push      r28                          ;   2: (YL)
+                     in        r29, _IO_SPH                 ;   1: FP <- SP
+                     in        r28, _IO_SPL                 ;   1:
+                     ; #### alloc locals ########           ; 
+                     sbiw      r28, 3                       ;   2: FP -= sizeof(locals))
+                     out       _IO_SPH, r29                 ;   1: SP <- FP
+                     out       _IO_SPL, r28                 ;   1:
+                     ; #### body text ###########           ; 
+                     ; ==== Compound Statement ============ ; L_compound_Id_000001
+                     ; ==== Expr Statement ================ ; 
+                     ldd       r20, Y+3                     ;   2: c
+                     push      r20                          ;   2:
+                     ldi       r20, 0x00                    ;   1: Immediate 0
+                     pop       r24                          ;   2:
+                     pop       r24                          ;   2: Mul 8
+                     clr       r0                           ;   1:
+L_MulMult_000002:    sbrc      r20, 0x00                    ; 1/3:
+                     add       r0, r24                      ;   1:
+                     lsl       r24                          ;   1:
+                     breq      L_MulDone_000003             ; 1/2:
+                     lsr       r20                          ;   1:
+                     brne      L_MulMult_000002             ; 1/2:
+L_MulDone_000003:    mov       r20, r0                      ;   1:
+                     mov       r21, r20                     ;   1: Signed extend 8 to 16 bits
+                     lsl       r21                          ;   1:
+                     clr       r21                          ;   1: 
+                     sbc       r21, r21                     ;   1:
+                     push      r20                          ;   2:
+                     push      r21                          ;   2:
+                     ldi       r20, 0xff                    ;   1: Immediate 65535
+                     ldi       r21, 0xff                    ;   1:
+                     pop       r25                          ;   2:
+                     pop       r24                          ;   2:
+                     add       r20, r24                     ;   1: Add 16
+                     adc       r21, r25                     ;   1:
+                     ;      Expr end ------------           
+                     ; ==== Expr Statement ================ ; 
+                     ldd       r20, Y+3                     ;   2: c
+                     ;      Expr end ------------           
+                     ; ==== Expr Statement ================ ; 
+                     ldd       r20, Y+3                     ;   2: c
+                     ;      Expr end ------------           
+                     ; ==== Expr Statement ================ ; 
+                     ldd       r20, Y+3                     ;   2: c
+                     mov       r21, r20                     ;   1: Signed extend 8 to 16 bits
+                     lsl       r21                          ;   1:
+                     clr       r21                          ;   1: 
+                     sbc       r21, r21                     ;   1:
+                     ;      Expr end ------------           
+                     ; ==== Expr Statement ================ ; 
+                     ldd       r20, Y+1                     ;   2: s
+                     ldd       r21, Y+2                     ;   2:
+                     mov       r21, r20                     ;   1: Signed extend 8 to 16 bits
+                     lsl       r21                          ;   1:
+                     clr       r21                          ;   1: 
+                     sbc       r21, r21                     ;   1:
+                     ;      Expr end ------------           
+                     ; ==== Expr Statement ================ ; 
+                     ldd       r20, Y+3                     ;   2: c
+                     push      r20                          ;   2:
+                     ldi       r20, 0x00                    ;   1: Immediate 0
+                     pop       r24                          ;   2:
+                     pop       r24                          ;   2: Mul 8
+                     clr       r0                           ;   1:
+L_MulMult_000004:    sbrc      r20, 0x00                    ; 1/3:
+                     add       r0, r24                      ;   1:
+                     lsl       r24                          ;   1:
+                     breq      L_MulDone_000005             ; 1/2:
+                     lsr       r20                          ;   1:
+                     brne      L_MulMult_000004             ; 1/2:
+L_MulDone_000005:    mov       r20, r0                      ;   1:
+                     mov       r21, r20                     ;   1: Signed extend 8 to 16 bits
+                     lsl       r21                          ;   1:
+                     clr       r21                          ;   1: 
+                     sbc       r21, r21                     ;   1:
+                     push      r20                          ;   2:
+                     push      r21                          ;   2:
+                     ldi       r20, 0x7f                    ;   1: Immediate 65407
+                     ldi       r21, 0xff                    ;   1:
+                     pop       r25                          ;   2:
+                     pop       r24                          ;   2:
+                     add       r20, r24                     ;   1: Add 16
+                     adc       r21, r25                     ;   1:
+                     ;      Expr end ------------           
+                     ; ==== Expr Statement ================ ; 
+                     ldd       r20, Y+3                     ;   2: c
+                     push      r20                          ;   2:
+                     ldi       r20, 0x00                    ;   1: Immediate 0
+                     pop       r24                          ;   2:
+                     pop       r24                          ;   2: Mul 8
+                     clr       r0                           ;   1:
+L_MulMult_000006:    sbrc      r20, 0x00                    ; 1/3:
+                     add       r0, r24                      ;   1:
+                     lsl       r24                          ;   1:
+                     breq      L_MulDone_000007             ; 1/2:
+                     lsr       r20                          ;   1:
+                     brne      L_MulMult_000006             ; 1/2:
+L_MulDone_000007:    mov       r20, r0                      ;   1:
+                     mov       r21, r20                     ;   1: Signed extend 8 to 16 bits
+                     lsl       r21                          ;   1:
+                     clr       r21                          ;   1: 
+                     sbc       r21, r21                     ;   1:
+                     push      r20                          ;   2:
+                     push      r21                          ;   2:
+                     ldi       r20, 0xff                    ;   1: Immediate 4863
+                     ldi       r21, 0x12                    ;   1:
+                     pop       r25                          ;   2:
+                     pop       r24                          ;   2:
+                     add       r20, r24                     ;   1: Add 16
+                     adc       r21, r25                     ;   1:
+                     mov       r21, r20                     ;   1: Signed extend 8 to 16 bits
+                     lsl       r21                          ;   1:
+                     clr       r21                          ;   1: 
+                     sbc       r21, r21                     ;   1:
+                     ;      Expr end ------------           
+                     ; ==== Expr Statement ================ ; 
+                     ldd       r20, Y+3                     ;   2: c
+                     push      r20                          ;   2:
+                     ldi       r20, 0x00                    ;   1: Immediate 0
+                     pop       r24                          ;   2:
+                     pop       r24                          ;   2: Mul 8
+                     clr       r0                           ;   1:
+L_MulMult_000008:    sbrc      r20, 0x00                    ; 1/3:
+                     add       r0, r24                      ;   1:
+                     lsl       r24                          ;   1:
+                     breq      L_MulDone_000009             ; 1/2:
+                     lsr       r20                          ;   1:
+                     brne      L_MulMult_000008             ; 1/2:
+L_MulDone_000009:    mov       r20, r0                      ;   1:
+                     mov       r21, r20                     ;   1: Signed extend 8 to 16 bits
+                     lsl       r21                          ;   1:
+                     clr       r21                          ;   1: 
+                     sbc       r21, r21                     ;   1:
+                     push      r20                          ;   2:
+                     push      r21                          ;   2:
+                     ldi       r20, 0x7f                    ;   1: Immediate 4735
+                     ldi       r21, 0x12                    ;   1:
+                     pop       r25                          ;   2:
+                     pop       r24                          ;   2:
+                     add       r20, r24                     ;   1: Add 16
+                     adc       r21, r25                     ;   1:
+                     mov       r21, r20                     ;   1: Signed extend 8 to 16 bits
+                     lsl       r21                          ;   1:
+                     clr       r21                          ;   1: 
+                     sbc       r21, r21                     ;   1:
+                     ;      Expr end ------------           
+                     ; ==== Expr Statement ================ ; 
+                     ldd       r20, Y+3                     ;   2: c
+                     push      r20                          ;   2:
+                     ldi       r20, 0x00                    ;   1: Immediate 0
+                     pop       r24                          ;   2:
+                     pop       r24                          ;   2: Mul 8
+                     clr       r0                           ;   1:
+L_MulMult_000010:    sbrc      r20, 0x00                    ; 1/3:
+                     add       r0, r24                      ;   1:
+                     lsl       r24                          ;   1:
+                     breq      L_MulDone_000011             ; 1/2:
+                     lsr       r20                          ;   1:
+                     brne      L_MulMult_000010             ; 1/2:
+L_MulDone_000011:    mov       r20, r0                      ;   1:
+                     mov       r21, r20                     ;   1: Signed extend 8 to 16 bits
+                     lsl       r21                          ;   1:
+                     clr       r21                          ;   1: 
+                     sbc       r21, r21                     ;   1:
+                     push      r20                          ;   2:
+                     push      r21                          ;   2:
+                     ldi       r20, 0xff                    ;   1: Immediate 4863
+                     ldi       r21, 0x12                    ;   1:
+                     pop       r25                          ;   2:
+                     pop       r24                          ;   2:
+                     add       r20, r24                     ;   1: Add 16
+                     adc       r21, r25                     ;   1:
+                     clr       r21                          ;   1: unsigned extend 8 to 16 bits
+                     ;      Expr end ------------           
+                     ; ==== Expr Statement ================ ; 
+                     ldd       r20, Y+3                     ;   2: c
+                     push      r20                          ;   2:
+                     ldi       r20, 0x00                    ;   1: Immediate 0
+                     pop       r24                          ;   2:
+                     pop       r24                          ;   2: Mul 8
+                     clr       r0                           ;   1:
+L_MulMult_000012:    sbrc      r20, 0x00                    ; 1/3:
+                     add       r0, r24                      ;   1:
+                     lsl       r24                          ;   1:
+                     breq      L_MulDone_000013             ; 1/2:
+                     lsr       r20                          ;   1:
+                     brne      L_MulMult_000012             ; 1/2:
+L_MulDone_000013:    mov       r20, r0                      ;   1:
+                     push      r20                          ;   2:
+                     ldi       r20, 0x80                    ;   1: Immediate 128
+                     pop       r24                          ;   2:
+                     add       r20, r24                     ;   1: Add 8
+                     mov       r21, r20                     ;   1: Signed extend 8 to 16 bits
+                     lsl       r21                          ;   1:
+                     clr       r21                          ;   1: 
+                     sbc       r21, r21                     ;   1:
+                     ;      Expr end ------------           
+                     ;      Compound End --------           ; L_compound_Id_000001
+                     ; #### exit ################           ; 
+L_Exit_000000:       adiw      r28, 3                       ;   2: Y += sizeof(locals)
+                     out       _IO_SPH, r29                 ;   1: SP <- Y
+                     out       _IO_SPL, r28                 ;   1:
+                     pop       r28                          ;   2: FP <- preserved Frame
+                     pop       r29                          ;   2: 
+                     ret                                    ;   4: 
+                     
+         
+                            
+                     ;.endseg                               ; === End of TEXT segment ===
+
+
+
+                     .end                                   ; End of generated code.
+
+; eof

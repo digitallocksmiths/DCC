@@ -1,0 +1,244 @@
+; SKC AVR Output - V1(Jan  2 2020)
+
+#define		_IO_SPL	0x3D
+#define		_IO_SPH	0x3E
+
+                                                            ; ##########################
+                                                            ; # Start of CONST segment #
+                     .section    CONST, "a"                 ; ##########################
+                     ;.endseg                               ; === End of CONST segment ===
+
+
+                                                            ; #########################
+                                                            ; # Start of INIT segment #
+                     .section    INIT,  "a"                 ; #########################
+                                                            ; This is the source of the initialization data
+                                                            ; #########################
+                     .section    .data                      ; # Start of DATA segment #
+                                                            ; #########################
+                                                            ; This is where the initialization data will be copied to
+                     ;.endseg                               ; === End of DATA segment ===
+
+
+                                                            ; ########################
+                     .section    .bss                       ; # Start of BSS segment #
+                                                            ; ########################
+                                                            ; Here starts the uninitialized data
+                     ;.endseg                               ; === End of BSS segment ===
+
+
+                                                            ; #########################
+                     .section    .text                      ; # Start of TEXT segment #
+                                                            ; #########################
+                                                            ; Here starts the executable code
+
+                     .global   foo
+foo:                 ; ###########################################
+                     ; # Function: foo                      
+                     ; #   Return: void                     
+                     ; #   Params: <none>                   
+                     ; #   CPU   : @Y+3, Return Address     
+                     ; #         : @Y+1, Preserved Frame Pointer
+                     ; #   Locals: <none>                   
+                     ; #         : sizeof(locals) = 0       
+                     ; ###########################################
+                     ; #### no frame needed #####           ; no parameters or locals
+                     ; #### body text ###########           ; 
+                     ; ==== Compound Statement ============ ; L_compound_Id_000001
+                     ;      Compound End --------           ; L_compound_Id_000001
+                     ; #### exit ################           ; 
+L_Exit_000000:       ret                                    ;  4: 
+                     
+         
+                            
+
+                     .global   foo_p
+foo_p:               ; ###########################################
+                     ; # Function: foo_p                    
+                     ; #   Return: void                     
+                     ; #   Params: @Y+5  , i  size=2 int    
+                     ; #   CPU   : @Y+3, Return Address     
+                     ; #         : @Y+1, Preserved Frame Pointer
+                     ; #   Locals: <none>                   
+                     ; #         : sizeof(locals) = 0       
+                     ; ###########################################
+                     ; #### frame setup #########           ; 
+                     push      r29                          ;   2: (YH) preserve Frame
+                     push      r28                          ;   2: (YL)
+                     in        r29, _IO_SPH                 ;   1: FP <- SP
+                     in        r28, _IO_SPL                 ;   1:
+                     ; #### body text ###########           ; 
+                     ; ==== Compound Statement ============ ; L_compound_Id_000003
+                     ;      Compound End --------           ; L_compound_Id_000003
+                     ; #### exit ################           ; 
+L_Exit_000002:       adiw      r28, 0                       ;   2: Y += sizeof(locals)
+                     out       _IO_SPH, r29                 ;   1: SP <- Y
+                     out       _IO_SPL, r28                 ;   1:
+                     pop       r28                          ;   2: FP <- preserved Frame
+                     pop       r29                          ;   2: 
+                     ret                                    ;   4: 
+                     
+         
+                            
+
+                     .global   foo_l
+foo_l:               ; ###########################################
+                     ; # Function: foo_l                    
+                     ; #   Return: void                     
+                     ; #   Params: <none>                   
+                     ; #   CPU   : @Y+5, Return Address     
+                     ; #         : @Y+3, Preserved Frame Pointer
+                     ; #   Locals: @Y+1  , i  size=2 int    
+                     ; #         : sizeof(locals) = 2       
+                     ; ###########################################
+                     ; #### frame setup #########           ; 
+                     push      r29                          ;   2: (YH) preserve Frame
+                     push      r28                          ;   2: (YL)
+                     in        r29, _IO_SPH                 ;   1: FP <- SP
+                     in        r28, _IO_SPL                 ;   1:
+                     ; #### alloc locals ########           ; 
+                     sbiw      r28, 2                       ;   2: FP -= sizeof(locals))
+                     out       _IO_SPH, r29                 ;   1: SP <- FP
+                     out       _IO_SPL, r28                 ;   1:
+                     ; #### body text ###########           ; 
+                     ; ==== Compound Statement ============ ; L_compound_Id_000005
+                     ;      Compound End --------           ; L_compound_Id_000005
+                     ; #### exit ################           ; 
+L_Exit_000004:       adiw      r28, 2                       ;   2: Y += sizeof(locals)
+                     out       _IO_SPH, r29                 ;   1: SP <- Y
+                     out       _IO_SPL, r28                 ;   1:
+                     pop       r28                          ;   2: FP <- preserved Frame
+                     pop       r29                          ;   2: 
+                     ret                                    ;   4: 
+                     
+         
+                            
+
+                     .global   foo_p_l
+foo_p_l:             ; ###########################################
+                     ; # Function: foo_p_l                  
+                     ; #   Return: void                     
+                     ; #   Params: <none>                   
+                     ; #   CPU   : @Y+5, Return Address     
+                     ; #         : @Y+3, Preserved Frame Pointer
+                     ; #   Locals: @Y+1  , i  size=2 int    
+                     ; #         : sizeof(locals) = 2       
+                     ; ###########################################
+                     ; #### frame setup #########           ; 
+                     push      r29                          ;   2: (YH) preserve Frame
+                     push      r28                          ;   2: (YL)
+                     in        r29, _IO_SPH                 ;   1: FP <- SP
+                     in        r28, _IO_SPL                 ;   1:
+                     ; #### alloc locals ########           ; 
+                     sbiw      r28, 2                       ;   2: FP -= sizeof(locals))
+                     out       _IO_SPH, r29                 ;   1: SP <- FP
+                     out       _IO_SPL, r28                 ;   1:
+                     ; #### body text ###########           ; 
+                     ; ==== Compound Statement ============ ; L_compound_Id_000007
+                     ;      Compound End --------           ; L_compound_Id_000007
+                     ; #### exit ################           ; 
+L_Exit_000006:       adiw      r28, 2                       ;   2: Y += sizeof(locals)
+                     out       _IO_SPH, r29                 ;   1: SP <- Y
+                     out       _IO_SPL, r28                 ;   1:
+                     pop       r28                          ;   2: FP <- preserved Frame
+                     pop       r29                          ;   2: 
+                     ret                                    ;   4: 
+                     
+         
+                            
+
+                     .global   bar
+bar:                 ; ###########################################
+                     ; # Function: bar                      
+                     ; #   Return: unsigned int  (r4,r5)    
+                     ; #   Params: @Y+18 , l  size=4 long   
+                     ; #         : @Y+16 , i  size=2 int    
+                     ; #   CPU   : @Y+14, Return Address    
+                     ; #         : @Y+12, Preserved Frame Pointer
+                     ; #   Locals: @Y+11 , c  size=1 char   
+                     ; #         : @Y+9  , s1  size=2 short 
+                     ; #         : @Y+7  , s2  size=2 short 
+                     ; #         : @Y+5  , s3  size=2 short 
+                     ; #   Locals: @Y+3  , i2  size=2 int   
+                     ; #   Locals: @Y+1  , l2  size=4 long  
+                     ; #   Locals: @Y+4  , c2  size=1 char  
+                     ; #         : sizeof(locals) = 11      
+                     ; ###########################################
+                     ; #### frame setup #########           ; 
+                     push      r29                          ;   2: (YH) preserve Frame
+                     push      r28                          ;   2: (YL)
+                     in        r29, _IO_SPH                 ;   1: FP <- SP
+                     in        r28, _IO_SPL                 ;   1:
+                     ; #### alloc locals ########           ; 
+                     sbiw      r28, 11                      ;   2: FP -= sizeof(locals))
+                     out       _IO_SPH, r29                 ;   1: SP <- FP
+                     out       _IO_SPL, r28                 ;   1:
+                     ; #### body text ###########           ; 
+                     ; ==== Compound Statement ============ ; L_compound_Id_000009
+                     ; ==== Expr Statement ================ ; 
+                     ldi       r26, 0x00                    ;   1: const 0
+                     ldi       r27, 0x00                    ;   1:
+                     movw      r4, r26                      ;   1:
+                     std       Y+9, r4                      ;   2: s1
+                     std       Y+10, r5                     ;   2:
+                     ;      Expr end ------------           
+                     ; ==== For Statement ================= ; 
+L_ForAgain_000011:   ;      For Body ------------           ; 
+                     ; ==== Compound Statement ============ ; L_compound_Id_000013
+                     ; ==== Expr Statement ================ ; 
+                     ldi       r26, 0x05                    ;   1: const 5
+                     ldi       r27, 0x00                    ;   1:
+                     movw      r4, r26                      ;   1:
+                     std       Y+3, r4                      ;   2: i2
+                     std       Y+4, r5                      ;   2:
+                     ;      Expr end ------------           
+                     ;      Compound End --------           ; L_compound_Id_000013
+                     rjmp      L_ForTest_000010             ;   2:
+L_Break_000012:      ;      For end -------------           ; 
+                     ; ==== For Statement ================= ; 
+L_ForAgain_000015:   ;      For Body ------------           ; 
+                     ; ==== Compound Statement ============ ; L_compound_Id_000017
+                     ; ==== Expr Statement ================ ; 
+                     ldi       r26, 0x05                    ;   1: const 5
+                     ldi       r27, 0x00                    ;   1:
+                     movw      r4, r26                      ;   1:
+                     ldi       r26, 0x00                    ;   1:
+                     ldi       r27, 0x00                    ;   1:
+                     movw      r6, r26                      ;   1:
+                     std       Y+1, r4                      ;   2: l2
+                     std       Y+2, r5                      ;   2:
+                     std       Y+3, r6                      ;   2:
+                     std       Y+4, r7                      ;   2:
+                     ;      Expr end ------------           
+                     ;      Compound End --------           ; L_compound_Id_000017
+                     rjmp      L_ForTest_000014             ;   2:
+L_Break_000016:      ;      For end -------------           ; 
+                     ; ==== For Statement ================= ; 
+L_ForAgain_000019:   ;      For Body ------------           ; 
+                     ; ==== Compound Statement ============ ; L_compound_Id_000021
+                     ; ==== Expr Statement ================ ; 
+                     ldi       r26, 0x05                    ;   1: const 5
+                     mov       r4, r26                      ;   1:
+                     std       Y+4, r4                      ;   2: c2
+                     ;      Expr end ------------           
+                     ;      Compound End --------           ; L_compound_Id_000021
+                     rjmp      L_ForTest_000018             ;   2:
+L_Break_000020:      ;      For end -------------           ; 
+                     ;      Compound End --------           ; L_compound_Id_000009
+                     ; #### exit ################           ; 
+L_Exit_000008:       adiw      r28, 11                      ;   2: Y += sizeof(locals)
+                     out       _IO_SPH, r29                 ;   1: SP <- Y
+                     out       _IO_SPL, r28                 ;   1:
+                     pop       r28                          ;   2: FP <- preserved Frame
+                     pop       r29                          ;   2: 
+                     ret                                    ;   4: 
+                     
+         
+                            
+                     ;.endseg                               ; === End of TEXT segment ===
+
+
+
+                     .end                                   ; End of generated code.
+
+; eof

@@ -1,0 +1,31 @@
+﻿  Main.c
+  Todo: Declaration function names to start with Decl?
+  Todo: Local and parameters:  read and write need immeadiate or direct indication (ld r0,a or ld r0,#a.
+  Todo: Local and parameters:  read before set warnings.
+  Todo: No concept of alignmnent. All vars occupy their own size and no packing is generated.
+  Todo: void Foo(void). Parameters display incorrectly.
+  Todo: Subtraction of arrays looks odd. Debug and comment the code.
+  ToDo: C-parsing expression optimisation could be skipped and left for the optimizer?
+  ToDo: Array, arrow and dot could be translated to arithmetic?
+  Initializers.c
+  warn XS here
+  warn XS here
+  GenStatements.c
+  GenExpression.c
+  GenData.c
+      **** GenDataObjectEnum(): improvement. Comment could be the enum symbol name?
+  Gen.c
+  ExprOptimize.c
+      OptimizeTernary(): Needs to be optimized.
+      OptimizeDotExpr(): Needs to be optimized.
+      OptimizeArrowExpr(): Needs to be optimized.
+      OptimizeArrayExpr(): Needs to be optimized.
+      OptimizeAssign(): Needs to be optimized.
+  Expr.c
+  Optimize And
+  Optimize Or
+  Optimize Xor
+      **** should we change the node's type here?
+  Generating Code...
+  CC_Avr.vcxproj -> D:\DL\sean\RoyalHolloway\2019\CC_Avr\Debug\CC_Avr.exe
+  CC_Avr.vcxproj -> D:\DL\sean\RoyalHolloway\2019\CC_Avr\Debug\CC_Avr.pdb (Full PDB)

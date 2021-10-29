@@ -1,0 +1,10 @@
+
+#define GEN_PREFIX "L"
+static WORD GenCount = 0;
+
+LPSTR
+GenLabel(LPSTR PreFix) {
+	LPSTR Label = New(strlen(GEN_PREFIX)+strlen(PreFix)+6+1);
+	sprintf(Label, GEN_PREFIX "%%06ld", PreFix, GenCount++);
+	return Label;
+ }

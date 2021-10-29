@@ -1,0 +1,42 @@
+﻿  YACC
+  D:\DL\sean\RoyalHolloway\2019\CC_Avr\\tool\yacc.exe: 1 shift/reduce conflict.
+  Console.c
+  TypeCtrl.c
+  Statements.c
+  Main.c
+  Lex.c
+  Initializers.c
+  warn XS here
+  warn XS here
+  Gen.c
+      **** GenDataObjectEnum(): improvement. Comment could be the enum symbol name?
+  Expr.c
+  ResultingType: calculate result of combination.
+  Optimize Add
+  Optimize Sub
+  Optimize Mul
+  Optimize Div
+  Optimize Mod
+  Optimize And
+  Optimize Or
+  Optimize Xor
+  Optimize >>
+  Optimize <<
+  Comparisons need to note the sign
+  Optimize ==
+  Comparisons need to note the sign
+  Optimize !=
+  Comparisons need to note the sign
+  Optimize <
+  Comparisons need to note the sign
+  Optimize <=
+  Comparisons need to note the sign
+  Optimize >
+  Comparisons need to note the sign
+  Optimize >=
+  Optimize &&
+  Optimize ||
+  C_Yacced.tab.c
+  Generating Code...
+  CC_Avr.vcxproj -> D:\DL\sean\RoyalHolloway\2019\CC_Avr\Debug\CC_Avr.exe
+  CC_Avr.vcxproj -> D:\DL\sean\RoyalHolloway\2019\CC_Avr\Debug\CC_Avr.pdb (Full PDB)

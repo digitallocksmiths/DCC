@@ -1,0 +1,118 @@
+/* *************** */
+/* Type structures */
+/* *************** */
+
+typedef enum {      uConst,  uVar,    uUnary,  uBinary,uTernary,
+                    uCast,   uAssign, uInit,   uArrow, uDot,
+                    uArray,  uFunc
+             } ExprUsage;
+
+typedef enum {      Minus,  Plus,   Neg,    PostInc,PreInc,
+                    PostDec,PreDec, SizeOf, Addr,   Ptr,
+                    Not
+             } ExprUnOp;
+
+typedef enum {      Add,    Sub,    Mul,    Div,    Mod,
+                    BAnd,   BOr,    BXor,   CEQ,    CNE,
+                    CLT,    CLE,    CGT,    CGE,    LAnd,
+                    LOr,    BSR,    BSL
+             } ExprBiOp;
+
+typedef enum {      CondExp
+             } ExprTriOp;
+
+typedef enum {      AsNop,  AsAdd,  AsSub,  AsMul,  AsDiv,
+                    AsMod,  AsBAnd, AsBOr,  AsBXor, AsSR,
+                    AsSL
+             } ExprAssign;
+
+typedef struct TagExprNode TExprNode;
+typedef TExprNode  * TPExprNode;
+struct TagExprNode {
+    ExprUsage       Usage;
+    TPDeclSpec      pType;
+    union {
+        struct {
+            LONG        lInteger;
+        } Const;
+        struct {
+            LPSTR       pszIdentifier;
+        } Var;
+        struct {
+            WORD        Op;
+            TPExprNode  pOperand;
+        } Unary;
+        struct {
+            WORD        Op;
+            TPExprNode  pLeft;
+            TPExprNode  pRight;
+        } Binary;
+        struct {
+            WORD        Op;
+            TPExprNode  First;
+            TPExprNode  Second;
+            TPExprNode  Third;
+        } Ternary;
+        struct {
+            WORD        Op;
+            TPExprNode  pLval;
+            TPExprNode  pRval;
+        } Assign;
+        struct {
+            TPExprNode  pTarget;
+        } Cast;
+        struct {
+            TPExprNode  pAssignment;
+            TPExprNode  pSibling;
+            TPExprNode  pChildren;
+        } Init;
+        struct {
+            TPExprNode  pRecord;
+            LPSTR       pszField;
+        } Arrow;
+        struct {
+            TPExprNode  pRecord;
+            LPSTR       pszField;
+        } Dot;
+        struct {
+            TPExprNode  pVector;
+            TPExprNode  pIndex;
+        } Array;
+        struct {
+            TPExprNode  pFunc;
+            TPExprNode  pParams;
+        } pFunc;
+    } Use;
+ };
+
+TPExprNode  MakeExprConstC( LONG   Value);
+TPExprNode  MakeExprConstI( LONG   Value);
+TPExprNode  MakeExprConstF( DOUBLE Value);
+TPExprNode  MakeExprConstS( LPSTR  Value);
+TPExprNode  MakeExprVar(    LPSTR  Var);
+TPExprNode  MakeUnaryNode(  WORD   Op, TPExprNode Node);
+TPExprNode  MakeBinaryNode( WORD   Op, TPExprNode Left,  TPExprNode Right);
+TPExprNode  MakeTernaryNode(WORD   Op, TPExprNode First, TPExprNode Second, TPExprNode Third);
+TPExprNode  MakeArrowNode(  TPExprNode Left,  LPSTR Field);
+TPExprNode  MakeDotNode(    TPExprNode Left,  LPSTR Field);
+TPExprNode  MakeArrayNode(  TPExprNode Vec,   TPExprNode Ind);
+TPExprNode  MakeFuncNode(   TPExprNode Fn,    TPExprNode Params);
+TPExprNode  MakeAssignNode( WORD   Op, TPExprNode Lval,  TPExprNode Rval);
+TPExprNode  MakeCastNode(   TPDeclSpec Type,  TPExprNode Node);
+
+TPExprNode  MakeInitNode(TPExprNode Node);
+TPExprNode  MakeInitList(TPExprNode Node);
+TPExprNode  MakeInitConcat(TPExprNode Node,  TPExprNode Brother);
+void        PrintInit(TPExprNode n);
+
+DWORD       ConstInt(TPExprNode E);
+//DOUBLE      ConstFloat(LpExprNode E);
+LPSTR       ConstString(TPExprNode E);
+
+void        CleanUp(TPExprNode n);
+#ifdef _DEBUG
+void        ParseExpr(TPExprNode n,int depth);
+#endif // _DEBUG
+
+/* eof */
+

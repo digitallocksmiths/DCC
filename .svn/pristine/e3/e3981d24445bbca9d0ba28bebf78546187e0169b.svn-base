@@ -1,0 +1,4266 @@
+// # $URL$
+// # $Revision$
+
+#pragma message(" Logical operations generate values. Change this to branch targets.")
+// Skipping code is better.
+
+
+#define _CRT_SECURE_NO_WARNINGS
+
+#include <stdio.h>
+#include <ctype.h>
+#include <signal.h>
+#include <setjmp.h>
+#include <stdlib.h>
+#include <memory.h>
+#include <string.h>
+#include <limits.h>
+#include <float.h>
+#include <Windows.h>
+
+//#include <ext\types.h>
+#include "Utilities\Console.h"
+
+#include "lex.h"
+#include "typectrl.h"
+#include "expr.h"
+#include "gen.h"
+#include "main.h"
+#include "C_Yacced.tab.h"
+#include "GenStatements.h"
+
+
+static FILE *hGlbOut;
+
+static void    GenExpr(TPExprNode pExpr);                                               // forward
+static void    GenExprConditional(TPExprNode pExpr, LPSTR pzsTrue, LPSTR pszFalse);     // forward
+
+
+#ifdef _DEBUG
+
+char *Uops[] = { "-u",  "+u",  "~u",    "u++",  "++u", "u--", "--u", "sizeof","addr", "ptr", "!u" };
+
+char *Bops[] = { "+b",  "-b",  "*b",    "/b",   "%b", "&b",  "|b",  "^b",    "==b",  "!=b", "<b",  "<=b", ">b",    ">=b",  "&&b", "||b", ">>b", "<<b" };
+
+
+void PrintNode(TPExprNode pN) {
+    switch (pN->Usage) {
+        case uConst:    printf("%lx ",  pN->Use.Const.lInteger);
+                        break;
+        case uVar:      printf("<%s> ",  pN->Use.Var.pszIdentifier);
+                        break;
+        case uUnary:    printf("(op ");
+                        PrintNode(pN->Use.Unary.pOperand);
+                        printf(")");
+                        break;
+        default:    Error(WARNING0, "Other ");
+                    break;
+    }
+}
+
+void ExprPrintInit(TPExprNode n) {
+    while (n) {
+        if (n->Usage != uInit) {
+            Error(FATAL, "PrintInit: What !\n");
+        }
+        if (n->Use.Init.pAssignment) {
+            PrintNode(n->Use.Init.pAssignment);
+        }
+        if (n->Use.Init.pChildren) {
+            printf("{ ");
+            ExprPrintInit(n->Use.Init.pChildren);
+            printf("} ");
+        }
+        n=n->pSibling;
+    }
+}
+
+
+void PrintType(int iDepth, TPExprNode n) {
+    ASSERT(n->pType && ((n->pType->Usage == DecSpec) || (n->pType->Usage == DecPtr) || (n->pType->Usage == DecArray)));
+    ParseDeclSpec(0, n->pType, FALSE);
+ }
+
+char *pszCasts[] = {
+    "s8 to s16",
+    "s8 to s32",
+    "s16 to s32",
+    "u8 to u16",
+    "u8 to u32",
+    "u16 to u32",
+    "32 to 16",
+    "32 to 8",
+    "32 to BOOL",
+    "16 to 8",
+    "16 to BOOL",
+    "8 to BOOL"
+};
+
+
+
+void GenExpressionPrettyPrint(int iDepth, TPExprNode n) {
+    if (!n) {
+        printf("..Null\n");
+        return;
+    }
+    
+    switch (n->Usage) {
+        case    uConst:     ConsoleIndent(iDepth);
+                            ConsolePrintf(CON_MAGENTA_BRIGHT, "0x%x ",    n->Use.Const.lInteger);
+                            PrintType(iDepth, n);
+                            break;
+        case    uVar:       ConsoleIndent(iDepth);
+                            ConsolePrintf(CON_YELLOW_BRIGHT, "[%s",  n->Use.Var.pszIdentifier);
+                            if (n->Use.Var.iFrameOffset != GLOBAL_VAR) ConsolePrintf(CON_YELLOW_BRIGHT, ":%d] ", n->Use.Var.iFrameOffset);       // variable offset
+                            else                                       ConsolePrintf(CON_YELLOW_BRIGHT, "] ");                                   // variable is global
+                            PrintType(iDepth, n);
+                            break;
+        case    uUnary:     ConsoleIndent(iDepth);
+                            printf("%s ", Uops[n->Use.Unary.Op]);
+                            PrintType(iDepth, n);
+                            GenExpressionPrettyPrint(iDepth + 1, n->Use.Unary.pOperand);
+                            break;
+        case    uBinary:    GenExpressionPrettyPrint(iDepth + 1, n->Use.Binary.pLeft);
+                            ConsoleIndent(iDepth);
+                            printf("%s ", Bops[n->Use.Unary.Op]);
+                            PrintType(iDepth, n);
+                            GenExpressionPrettyPrint(iDepth + 1, n->Use.Binary.pRight);
+                            break;
+        case    uTernary:   ConsoleIndent(iDepth);
+                            printf("Tern ");
+                            PrintType(iDepth, n);
+                            GenExpressionPrettyPrint(iDepth + 1, n->Use.Ternary.First);
+                            ConsoleIndent(iDepth);
+                            printf("Then\n");
+                            GenExpressionPrettyPrint(iDepth + 1, n->Use.Ternary.Second);
+                            ConsoleIndent(iDepth);
+                            printf("Else\n");
+                            GenExpressionPrettyPrint(iDepth + 1, n->Use.Ternary.Third);
+                            break;
+        case    uDot:       GenExpressionPrettyPrint(iDepth + 1, n->Use.Dot.pRecord);
+                            ConsoleIndent(iDepth);
+                            printf("Dot ");
+                            PrintType(iDepth, n);
+                            ConsoleIndent(iDepth);
+                            printf("[%s:%d]\n", n->Use.Dot.pszField, n->Use.Dot.iOffset);
+                            break;
+        case    uArrow:     GenExpressionPrettyPrint(iDepth + 1, n->Use.Arrow.pRecord);
+                            ConsoleIndent(iDepth);
+                            printf("Arrow ");
+                            PrintType(iDepth, n);
+                            ConsoleIndent(iDepth);
+                            printf("[%s:%d]\n",n->Use.Arrow.pszField, n->Use.Arrow.iOffset);
+                            break;
+        case    uArray:     GenExpressionPrettyPrint(iDepth + 1, n->Use.Array.pVector);
+                            ConsoleIndent(iDepth);
+                            printf("Array ");
+                            PrintType(iDepth, n);
+                            GenExpressionPrettyPrint(iDepth + 1, n->Use.Array.pIndex);
+                            break;
+        case    uFunc:      GenExpressionPrettyPrint(iDepth + 1, n->Use.pFunc.pFunc);
+                            ConsoleIndent(iDepth);
+                            printf("Function ");
+                            PrintType(iDepth, n);
+                            GenExpressionPrettyPrint(iDepth + 1, n->Use.pFunc.pParams);
+                            break;
+        case    uCast:      ConsoleIndent(iDepth);
+                            printf("Cast %s", pszCasts[n->Use.Cast.Op]);
+                            PrintType(iDepth, n);
+                            GenExpressionPrettyPrint(iDepth + 1, n->Use.Cast.pTarget);
+                            break;
+        case    uAssign:    ConsoleIndent(iDepth);
+                            printf("Assign ");
+                            PrintType(iDepth, n);
+                            GenExpressionPrettyPrint(iDepth + 1, n->Use.Assign.pLval);
+                            ConsoleIndent(iDepth);
+                            printf(":=\n");
+                            GenExpressionPrettyPrint(iDepth + 1, n->Use.Assign.pRval);
+                            break;
+        default:            Error(FATAL, "ParseExpr: What [%d]\n", n->Usage);
+                            break;
+    }
+}
+#endif // _DEBUG
+
+// ############################################################################################
+static LPSTR OperandRegImmediate(int iR1, unsigned char bVal) {
+    static char caRegVal[16];
+    sprintf_s(caRegVal, sizeof(caRegVal), "r%d, 0x%02x", iR1, bVal);
+    return caRegVal;
+}
+
+static LPSTR OperandRegVar(int iR1, LPSTR pszVar) {
+    static char caRegStr[256];
+    if ((iR1 & 0x01) == 0) {
+        sprintf_s(caRegStr, sizeof(caRegStr), "r%d, lo8(%s)", iR1, pszVar);
+    }
+    else {
+        sprintf_s(caRegStr, sizeof(caRegStr), "r%d, hi8(%s)", iR1, pszVar);
+    }
+    return caRegStr;
+}
+
+static LPSTR OperandRegStr(int iR1, LPSTR pszStr) {
+    static char caRegVal[16];
+    sprintf_s(caRegVal, sizeof(caRegVal), "r%d, %s", iR1, pszStr);
+    return caRegVal;
+}
+
+static LPSTR OperandStrReg(LPSTR pszStr, int iR1) {
+    static char caRegVal[16];
+    sprintf_s(caRegVal, sizeof(caRegVal), "%s, r%d", pszStr, iR1);
+    return caRegVal;
+}
+
+static LPSTR OperandRegDisp(int iR1, LPSTR pszStr, int iDisp) {
+    static char caRegVal[16];
+    if (iDisp > 63) {
+        Error(ERRORX, "OperandRegDisp(): Local variable displacment is > 64. No can do.");
+    }
+    sprintf_s(caRegVal, sizeof(caRegVal), "r%d, %s+%d", iR1, pszStr, iDisp);
+    return caRegVal;
+}
+
+static LPSTR OperandDispReg(LPSTR pszStr, int iDisp, int iR1) {
+    static char caValReg[16];
+    if (iDisp > 63) {
+        Error(ERRORX, "OperandDispReg(): Local variable displacment is > 64. No can do.");
+    }
+    sprintf_s(caValReg, sizeof(caValReg), "%s+%d, r%d", pszStr, iDisp, iR1);
+    return caValReg;
+}
+
+static LPSTR OperandReg(int iR) {
+    static char caRegPair[16];
+    sprintf_s(caRegPair, sizeof(caRegPair), "r%d", iR);
+    return caRegPair;
+}
+
+static LPSTR OperandRegReg(int iR1, int iR2) {
+    static char caRegReg[16];
+    sprintf_s(caRegReg, sizeof(caRegReg), "r%d, r%d", iR1, iR2);
+    return caRegReg;
+}
+
+static LPSTR CommentNumber(int iCycles, LPSTR pszT, long lValue) {
+    static char caComment[256];
+    sprintf_s(caComment, sizeof(caComment), "%3d: %s%ld", iCycles, pszT, lValue);
+    return caComment;
+}
+
+static LPSTR CommentString(int iCycles, LPSTR pszT, LPSTR pszM) {
+    static char caComment[256];
+    if (iCycles == 0) {
+        sprintf_s(caComment, sizeof(caComment), "   : %s%s", pszT, pszM);
+    }
+    else {
+        sprintf_s(caComment, sizeof(caComment), "%3d: %s%s", iCycles, pszT, pszM);
+    }
+    return caComment;
+}
+ 
+void GenAsm(LPSTR pszLabel, LPSTR pszOpcode, LPSTR pszOperand, LPSTR pszComment) {
+    GenAsmOut(hGlbOut, pszLabel, pszOpcode, pszOperand, pszComment, TRUE, FALSE);           // always to the same file and always needs NL and it's non global.
+}
+
+
+// #################################################################################################
+
+
+// ##########################################################################
+// #  Function: AVR_Move
+// #        Move the register contents to another register. 
+// #        Works for 8, 16 & 32 bits.
+// #
+// #  Parameters:
+// #        <todo: params >
+// #
+// #  Returns:
+// #        <todo: return Value>
+// #
+// #  See Also:
+// #
+// ##########################################################################
+void AVR_Move(int iDest, int iSrce, int iTargetSize) {
+    ASSERT((iDest & 3) == 0);
+    ASSERT((iSrce & 3) == 0);
+    switch (iTargetSize) {
+    case 1:
+        GenAsm("", "mov",  OperandRegReg(iDest + REG_ORDER0, iSrce + REG_ORDER0), "  1:");
+        break;
+    case 2:
+        GenAsm("", "movw", OperandRegReg(iDest + REG_ORDER0, iSrce + REG_ORDER0), "  1:");
+        break;
+    case 4:
+        GenAsm("", "movw", OperandRegReg(iDest + REG_ORDER0, iSrce + REG_ORDER0), "  1:");
+        GenAsm("", "movw", OperandRegReg(iDest + REG_ORDER2, iSrce + REG_ORDER2), "  1:");
+        break;
+    default:
+        Error(FATAL, "AVR_Move to unknown sized object");
+        return;
+    }
+}
+
+// ##########################################################################
+// #  Function: AVR_Push
+// #        Push a register to the stack. 
+// #        Works for 8, 16 & 32 bits.
+// #        Data in memory will be little endian.
+// #
+// #  Parameters:
+// #        <todo: params >
+// #
+// #  Returns:
+// #        <todo: return Value>
+// #
+// #  See Also:
+// #
+// ##########################################################################
+void AVR_Push(int iReg, int iTargetSize) {
+    ASSERT((iReg & 3) == 0);
+    switch (iTargetSize) {
+    case 1:
+        GenAsm("", "push", OperandReg(iReg + REG_ORDER0), "  2:");
+        break;
+    case 2:
+        GenAsm("", "push", OperandReg(iReg + REG_ORDER0), "  2:");
+        GenAsm("", "push", OperandReg(iReg + REG_ORDER1), "  2:");
+        break;
+    case 4:
+        GenAsm("", "push", OperandReg(iReg + REG_ORDER0), "  2:");
+        GenAsm("", "push", OperandReg(iReg + REG_ORDER1), "  2:");
+        GenAsm("", "push", OperandReg(iReg + REG_ORDER2), "  2:");
+        GenAsm("", "push", OperandReg(iReg + REG_ORDER3), "  2:");
+        break;
+    default:
+        Error(FATAL, "AVR_Push to unknown sized object");
+        return;
+    }
+}
+
+// ##########################################################################
+// #  Function: AVR_Pop
+// #        Pop a register from the stack. 
+// #        Works for 8, 16 & 32 bits.
+// #        Data in memory expected to be little endian.
+// #
+// #  Parameters:
+// #        <todo: params >
+// #
+// #  Returns:
+// #        <todo: return Value>
+// #
+// #  See Also:
+// #
+// ##########################################################################
+void AVR_Pop(int iReg, int iTargetSize) {
+    ASSERT((iReg & 3) == 0);
+    switch (iTargetSize) {
+    case 1:
+        GenAsm("", "pop", OperandReg(iReg+ REG_ORDER0),  "  2:");
+        break;
+    case 2:
+        GenAsm("", "pop", OperandReg(iReg+ REG_ORDER1),  "  2:");
+        GenAsm("", "pop", OperandReg(iReg+ REG_ORDER0),  "  2:");
+        break;
+    case 4:
+        GenAsm("", "pop", OperandReg(iReg+ REG_ORDER3),  "  2:");
+        GenAsm("", "pop", OperandReg(iReg+ REG_ORDER2),  "  2:");
+        GenAsm("", "pop", OperandReg(iReg+ REG_ORDER1),  "  2:");
+        GenAsm("", "pop", OperandReg(iReg+ REG_ORDER0),  "  2:");
+        break;
+    default:
+        Error(FATAL, "AVR_Pop to unknown sized object");
+        return;
+    }
+}
+
+// ##########################################################################
+// #  Function: AVR_LoadImmediate8
+// #        Set a register to a constant value.
+// #
+// #  Parameters:
+// #        <todo: params >
+// #
+// #  Returns:
+// #        <todo: return Value>
+// #
+// #  See Also:
+// #
+// ##########################################################################
+void AVR_LoadImmediate8(int iReg, unsigned char bValue) {
+    ASSERT((iReg & 3) == 0);
+    ASSERT(iReg >= 16);
+    GenAsm("", "ldi",  OperandRegImmediate(iReg + REG_ORDER0, bValue), CommentNumber(1, "Immediate byte ", bValue));
+}
+
+// ##########################################################################
+// #  Function: AVR_LoadImmediate16
+// #        Set a register to a constant value.
+// #
+// #  Parameters:
+// #        <todo: params >
+// #
+// #  Returns:
+// #        <todo: return Value>
+// #
+// #  See Also:
+// #
+// ##########################################################################
+void AVR_LoadImmediate16(int iReg, unsigned short nValue) {
+    ASSERT((iReg & 3) == 0);
+    ASSERT(iReg >= 16);
+    GenAsm("", "ldi",  OperandRegImmediate(iReg + REG_ORDER0,   (nValue & 0xFF)),      CommentNumber(1, "Immediate short ", nValue));
+    GenAsm("", "ldi",  OperandRegImmediate(iReg + REG_ORDER1, ((nValue >> 8) & 0xFF)), "  1:");
+}
+
+// ##########################################################################
+// #  Function: AVR_LoadImmediate32
+// #        Set a register to a constant value.
+// #
+// #  Parameters:
+// #        <todo: params >
+// #
+// #  Returns:
+// #        <todo: return Value>
+// #
+// #  See Also:
+// #
+// ##########################################################################
+void AVR_LoadImmediate32(int iReg, unsigned long lValue) {
+    ASSERT((iReg & 3) == 0);
+    ASSERT(iReg >= 16);
+    GenAsm("", "ldi", OperandRegImmediate(iReg + REG_ORDER0,   (lValue & 0xFF)),       CommentNumber(1, "Immediate long ", lValue));
+    GenAsm("", "ldi", OperandRegImmediate(iReg + REG_ORDER1, ((lValue >> 8) & 0xFF)),  "  1:");
+    GenAsm("", "ldi", OperandRegImmediate(iReg + REG_ORDER2, ((lValue >> 16) & 0xFF)), "  1:");
+    GenAsm("", "ldi", OperandRegImmediate(iReg + REG_ORDER3, ((lValue >> 24) & 0xFF)), "  1:");
+}
+
+// ##########################################################################
+// #  Function: AVR_LoadRom8
+// #        Read contents of a ROM 'variable'.
+// #        reg8 = *Var*
+// #
+// #  Parameters:
+// #        <todo: params >
+// #
+// #  Returns:
+// #        <todo: return Value>
+// #
+// #  See Also:
+// #
+// ##########################################################################
+void AVR_LoadRom8(int iReg, LPSTR pszVar) {
+    ASSERT((iReg & 3) == 0);
+    GenAsm("", "ldi", OperandRegVar(30, pszVar),              CommentString(1, "Z = &", pszVar));
+    GenAsm("", "ldi", OperandRegVar(31, pszVar),              "  1:");
+    GenAsm("", "lpm", OperandRegStr(iReg + REG_ORDER0, "Z"),  CommentString(3, "byte <== ROM @", pszVar));
+}
+
+// ##########################################################################
+// #  Function: AVR_LoadRom16
+// #        Read contents of a ROM 'variable'.
+// #        reg16 = *Var*
+// #
+// #  Parameters:
+// #        <todo: params >
+// #
+// #  Returns:
+// #        <todo: return Value>
+// #
+// #  See Also:
+// #
+// ##########################################################################
+void  AVR_LoadRom16(int iReg, LPSTR pszVar) {
+    ASSERT((iReg & 3) == 0);
+    GenAsm("", "ldi", OperandRegVar(30, pszVar),              CommentString(1, "Z = &", pszVar));
+    GenAsm("", "ldi", OperandRegVar(31, pszVar),              "  1:");
+    GenAsm("", "lpm", OperandRegStr(iReg + REG_ORDER0, "Z+"), CommentString(3, "short <== ROM @", pszVar));
+    GenAsm("", "lpm", OperandRegStr(iReg + REG_ORDER1, "Z"),  "  3:");
+}
+
+// ##########################################################################
+// #  Function: AVR_LoadRom32
+// #        Read contents of a ROM 'variable'.
+// #        reg32 = *Var*
+// #
+// #  Parameters:
+// #        <todo: params >
+// #
+// #  Returns:
+// #        <todo: return Value>
+// #
+// #  See Also:
+// #
+// ##########################################################################
+void  AVR_LoadRom32(int iReg, LPSTR pszVar) {
+    ASSERT((iReg & 3) == 0);
+    GenAsm("", "ldi", OperandRegVar(30, pszVar),              CommentString(1, "Z = &", pszVar));
+    GenAsm("", "ldi", OperandRegVar(31, pszVar),              "  1:");
+    GenAsm("", "lpm", OperandRegStr(iReg + REG_ORDER0, "Z+"), CommentString(3, "long <== ROM @", pszVar));
+    GenAsm("", "lpm", OperandRegStr(iReg + REG_ORDER1, "Z+"), "  3:");
+    GenAsm("", "lpm", OperandRegStr(iReg + REG_ORDER2, "Z+"), "  3:");
+    GenAsm("", "lpm", OperandRegStr(iReg + REG_ORDER3, "Z"),  "  3:");
+}
+
+// ##########################################################################
+// #  Function: AVR_LoadRam8
+// #        Read contents of a RAM 'variable'.
+// #        reg8 = *Var*
+// #
+// #  Parameters:
+// #        <todo: params >
+// #
+// #  Returns:
+// #        <todo: return Value>
+// #
+// #  See Also:
+// #
+// ##########################################################################
+void AVR_LoadRam8(int iReg, LPSTR pszVar) {
+    ASSERT((iReg & 3) == 0);
+    GenAsm("", "ldi", OperandRegVar(30, pszVar),              CommentString(1, "Z = &", pszVar));
+    GenAsm("", "ldi", OperandRegVar(31, pszVar),              "  1:");
+    GenAsm("", "ld",  OperandRegStr(iReg + REG_ORDER0, "Z"),  CommentString(1, "byte <==  RAM @", pszVar)); 
+}
+
+// ##########################################################################
+// #  Function: AVR_LoadRam8PostInc
+// #        Read contents of a RAM variable.  
+// #        reg8 = *Var++*
+// #
+// #  Parameters:
+// #        <todo: params >
+// #
+// #  Returns:
+// #        <todo: return Value>
+// #
+// #  See Also:
+// #
+// ##########################################################################
+void AVR_LoadRam8PostInc(int iReg, LPSTR pszVar) {
+    ASSERT((iReg & 3) == 0);
+    GenAsm("", "ldi", OperandRegVar(30, pszVar),                  CommentString(1, "Z = &", pszVar));
+    GenAsm("", "ldi", OperandRegVar(31, pszVar),                  "  1:");
+    GenAsm("", "ld",  OperandRegStr(iReg + REG_ORDER0, "Z"),      CommentString(1, "byte <==  RAM @", pszVar));
+    GenAsm("", "mov", OperandRegReg(REG_TMP0, iReg + REG_ORDER0), "  1: post inc");
+    GenAsm("", "inc", OperandReg(REG_TMP0),                       "  1:");
+    GenAsm("", "st",  OperandStrReg("Z", REG_TMP0),               "  1:");
+}
+
+// ##########################################################################
+// #  Function: AVR_LoadRam8PreInc
+// #        Read contents of a RAM variable.   
+// #        reg8 = *++Var*
+// #
+// #  Parameters:
+// #        <todo: params >
+// #
+// #  Returns:
+// #        <todo: return Value>
+// #
+// #  See Also:
+// #
+// ##########################################################################
+void AVR_LoadRam8PreInc(int iReg, LPSTR pszVar) {
+    ASSERT((iReg & 3) == 0);
+    GenAsm("", "ldi", OperandRegVar(30, pszVar),                  CommentString(1, "Z = &", pszVar));
+    GenAsm("", "ldi", OperandRegVar(31, pszVar),                  "  1:");
+    GenAsm("", "ld",  OperandRegStr(iReg + REG_ORDER0, "Z"),      CommentString(1, "byte <==  RAM @", pszVar));
+    GenAsm("", "inc", OperandReg(iReg + REG_ORDER0),              "  1: pre inc");
+    GenAsm("", "ld",  OperandStrReg("Z", iReg + REG_ORDER0),      "  1:");
+}
+
+// ##########################################################################
+// #  Function: AVR_LoadRam8PostDec
+// #        Read contents of a RAM variable.   
+// #        reg8 = *Var--*
+// #
+// #  Parameters:
+// #        <todo: params >
+// #
+// #  Returns:
+// #        <todo: return Value>
+// #
+// #  See Also:
+// #
+// ##########################################################################
+void AVR_LoadRam8PostDec(int iReg, LPSTR pszVar) {
+    ASSERT((iReg & 3) == 0);
+    GenAsm("", "ldi", OperandRegVar(30, pszVar),                  CommentString(1, "Z = &", pszVar));
+    GenAsm("", "ldi", OperandRegVar(31, pszVar),                  "  1:");
+    GenAsm("", "ld",  OperandRegStr(iReg + REG_ORDER0, "Z"),      CommentString(1, "byte <==  RAM @", pszVar));
+    GenAsm("", "mov", OperandRegReg(REG_TMP0, iReg + REG_ORDER0), "  1: post dec");
+    GenAsm("", "dec", OperandReg(REG_TMP0),                       "  1:");
+    GenAsm("", "ld",  OperandStrReg("Z", REG_TMP0),               "  1:");
+}
+
+// ##########################################################################
+// #  Function: AVR_LoadRam8PostDec
+// #        Read contents of a RAM variable.   
+// #        reg8 = *--Var*
+// #
+// #  Parameters:
+// #        <todo: params >
+// #
+// #  Returns:
+// #        <todo: return Value>
+// #
+// #  See Also:
+// #
+// ##########################################################################
+void AVR_LoadRam8PreDec(int iReg, LPSTR pszVar) {
+    ASSERT((iReg & 3) == 0);
+    GenAsm("", "ldi", OperandRegVar(30, pszVar),                  CommentString(1, "Z = &", pszVar));
+    GenAsm("", "ldi", OperandRegVar(31, pszVar),                  "  1:");
+    GenAsm("", "ld",  OperandRegStr(iReg + REG_ORDER0, "Z"),      CommentString(1, "byte <==  RAM @", pszVar));
+    GenAsm("", "dec", OperandReg(iReg + REG_ORDER0),              "  1: pre dec");
+    GenAsm("", "ld",  OperandStrReg("Z", iReg + REG_ORDER0),      "  1:");
+}
+
+// ##########################################################################
+// #  Function: AVR_LoadRam16
+// #        Read contents of a RAM variable.
+// #        reg16 = *Var*
+// #
+// #  Parameters:
+// #        <todo: params >
+// #
+// #  Returns:
+// #        <todo: return Value>
+// #
+// #  See Also:
+// #
+// ##########################################################################
+void  AVR_LoadRam16(int iReg, LPSTR pszVar) {
+    ASSERT((iReg & 3) == 0);
+    GenAsm("", "ldi", OperandRegVar(30, pszVar),                 CommentString(1, "Z = &", pszVar));
+    GenAsm("", "ldi", OperandRegVar(31, pszVar),                 "  1:");
+    GenAsm("", "ld",  OperandRegStr(iReg + REG_ORDER0, "Z"),     CommentString(1, "short <==  RAM @", pszVar));
+    GenAsm("", "ldd", OperandRegDisp(iReg + REG_ORDER1, "Z", 1), "  2:");
+}
+
+// ##########################################################################
+// #  Function: AVR_LoadRam16PostInc
+// #        Read contents of a RAM variable.
+// #        reg16 = *Var++*
+// #
+// #  Parameters:
+// #        <todo: params >
+// #
+// #  Returns:
+// #        <todo: return Value>
+// #
+// #  See Also:
+// #
+// ##########################################################################
+void  AVR_LoadRam16PostInc(int iReg, LPSTR pszVar) {
+    ASSERT((iReg & 3) == 0);
+    ASSERT(((iReg & 1) == 0) && (iReg > 15));
+    GenAsm("", "ldi",  OperandRegVar(30, pszVar),                 CommentString(1, "Z = &", pszVar));
+    GenAsm("", "ldi",  OperandRegVar(31, pszVar),                 "  1:");
+    GenAsm("", "ld",   OperandRegStr(iReg + REG_ORDER0, "Z"),     CommentString(1, "short <==  RAM @", pszVar));
+    GenAsm("", "ldd",  OperandRegDisp(iReg + REG_ORDER1, "Z", 1), "  2:");
+    GenAsm("", "movw", OperandRegReg(REG_TMP0, iReg + REG_ORDER0),"  1: post inc");
+    GenAsm("", "adiw", OperandRegImmediate(REG_TMP0, 1),          "  2:");
+    GenAsm("", "st",   OperandStrReg("Z", REG_TMP0),              "  1:");
+    GenAsm("", "std",  OperandDispReg("Z", 1, REG_TMP1),          "  2:");
+}
+
+// ##########################################################################
+// #  Function: AVR_LoadRam16PreInc
+// #        Read contents of a RAM variable.
+// #        reg16 = *++Var*
+// #
+// #  Parameters:
+// #        <todo: params >
+// #
+// #  Returns:
+// #        <todo: return Value>
+// #
+// #  See Also:
+// #
+// ##########################################################################
+void  AVR_LoadRam16PreInc(int iReg, LPSTR pszVar) {
+    ASSERT((iReg & 3) == 0);
+    ASSERT(((iReg & 1) == 0) && (iReg > 15));
+    GenAsm("", "ldi",  OperandRegVar(30, pszVar),                    CommentString(1, "Z = &", pszVar));
+    GenAsm("", "ldi",  OperandRegVar(31, pszVar),                    "  1:");
+    GenAsm("", "ld",   OperandRegStr(iReg + REG_ORDER0, "Z"),        CommentString(1, "short <==  RAM @", pszVar));
+    GenAsm("", "ldd",  OperandRegDisp(iReg + REG_ORDER1, "Z", 1),    "  2:");
+    GenAsm("", "subi", OperandRegImmediate(iReg + REG_ORDER0, 0xff), "  1: pre inc");
+    GenAsm("", "sbci", OperandRegImmediate(iReg + REG_ORDER1, 0xff), "  1:");
+    GenAsm("", "st",   OperandStrReg("Z", iReg + REG_ORDER0),        "  1:");
+    GenAsm("", "std",  OperandDispReg("Z", 1, iReg + REG_ORDER1),    "  2:");
+}
+
+// ##########################################################################
+// #  Function: AVR_LoadRam16PostDec
+// #        Read contents of a RAM variable.
+// #        reg16 = *Var--*
+// #
+// #  Parameters:
+// #        <todo: params >
+// #
+// #  Returns:
+// #        <todo: return Value>
+// #
+// #  See Also:
+// #
+// ##########################################################################
+void  AVR_LoadRam16PostDec(int iReg, LPSTR pszVar) {
+    ASSERT((iReg & 3) == 0);
+    ASSERT(((iReg & 1) == 0) && (iReg > 15));
+    GenAsm("", "ldi",  OperandRegVar(30, pszVar),                  CommentString(1, "Z = &", pszVar));
+    GenAsm("", "ldi",  OperandRegVar(31, pszVar),                  "  1:");
+    GenAsm("", "ld",   OperandRegStr(iReg + REG_ORDER0, "Z"),      CommentString(1, "short <==  RAM @", pszVar));
+    GenAsm("", "ldd",  OperandRegDisp(iReg + REG_ORDER1, "Z", 1),  "  2:");
+    GenAsm("", "movw", OperandRegReg(REG_TMP0, iReg + REG_ORDER0), "  1: post dec");
+    GenAsm("", "sbiw", OperandRegImmediate(REG_TMP0, 1),           "  2:");
+    GenAsm("", "st",   OperandStrReg("Z", REG_TMP0),               "  1:");
+    GenAsm("", "std",  OperandDispReg("Z", 1, REG_TMP1),           "  2:");
+}
+
+// ##########################################################################
+// #  Function: AVR_LoadRam16PreDec
+// #        Read contents of a RAM variable.
+// #        reg16 = *--Var*
+// #
+// #  Parameters:
+// #        <todo: params >
+// #
+// #  Returns:
+// #        <todo: return Value>
+// #
+// #  See Also:
+// #
+// ##########################################################################
+void  AVR_LoadRam16PreDec(int iReg, LPSTR pszVar) {
+    ASSERT((iReg & 3) == 0);
+    ASSERT(((iReg & 1) == 0) && (iReg > 15));
+    GenAsm("", "ldi",  OperandRegVar(30, pszVar),                    CommentString(1, "Z = &", pszVar));
+    GenAsm("", "ldi",  OperandRegVar(31, pszVar),                    "  1:");
+    GenAsm("", "ld",   OperandRegStr(iReg + REG_ORDER0, "Z"),        CommentString(1, "short <==  RAM @", pszVar));
+    GenAsm("", "ldd",  OperandRegDisp(iReg + REG_ORDER1, "Z", 1),    "  2:");
+    GenAsm("", "subi", OperandRegImmediate(iReg + REG_ORDER0, 0x01), "  1: pre dec");
+    GenAsm("", "sbci", OperandRegImmediate(iReg + REG_ORDER1, 0x00), "  1:");
+    GenAsm("", "st",   OperandStrReg("Z", iReg + REG_ORDER0),        "  1:");
+    GenAsm("", "std",  OperandDispReg("Z", 1, iReg + REG_ORDER1),    "  2:");
+}
+
+// ##########################################################################
+// #  Function: AVR_LoadRam32
+// #        Read contents of a RAM variable.
+// #        reg32 = *Var*
+// #
+// #  Parameters:
+// #        <todo: params >
+// #
+// #  Returns:
+// #        <todo: return Value>
+// #
+// #  See Also:
+// #
+// ##########################################################################
+void  AVR_LoadRam32(int iReg, LPSTR pszVar) {
+    ASSERT((iReg & 3) == 0);
+    GenAsm("", "ldi", OperandRegVar(30, pszVar),                 CommentString(1, "Z = &", pszVar));
+    GenAsm("", "ldi", OperandRegVar(31, pszVar),                 "  1:");
+    GenAsm("", "ld",  OperandRegStr(iReg + REG_ORDER0, "Z"),     CommentString(1, "long <==  RAM @", pszVar));
+    GenAsm("", "ldd", OperandRegDisp(iReg + REG_ORDER1, "Z", 1), "  2:");
+    GenAsm("", "ldd", OperandRegDisp(iReg + REG_ORDER2, "Z", 2), "  2:");
+    GenAsm("", "ldd", OperandRegDisp(iReg + REG_ORDER3, "Z", 3), "  2:");
+}
+
+// ##########################################################################
+// #  Function: AVR_LoadRam32PostInc
+// #        Read contents of a RAM variable.
+// #        reg32 = *Var++*
+// #
+// #  Parameters:
+// #        <todo: params >
+// #
+// #  Returns:
+// #        <todo: return Value>
+// #
+// #  See Also:
+// #
+// ##########################################################################
+void  AVR_LoadRam32PostInc(int iReg, LPSTR pszVar) {
+    ASSERT((iReg & 3) == 0);
+    ASSERT(((iReg & 1) == 0) && (iReg > 15));
+    GenAsm("", "ldi", OperandRegVar(30, pszVar),                   CommentString(1, "Z = &", pszVar));
+    GenAsm("", "ldi", OperandRegVar(31, pszVar),                   "  1:");
+    GenAsm("", "ld",  OperandRegStr(iReg + REG_ORDER0,  "Z"),      CommentString(1, "long <==  RAM @", pszVar));
+    GenAsm("", "ldd", OperandRegDisp(iReg + REG_ORDER1, "Z", 1),   "  2:");
+    GenAsm("", "ldd", OperandRegDisp(iReg + REG_ORDER2, "Z", 2),   "  2:");
+    GenAsm("", "ldd", OperandRegDisp(iReg + REG_ORDER3, "Z", 3),   "  2:");
+    GenAsm("", "movw", OperandRegReg(REG_TMP0, iReg + REG_ORDER0), "  1: post inc");
+    GenAsm("", "movw", OperandRegReg(REG_TMP2, iReg + REG_ORDER2), "  1:");
+    GenAsm("", "subi", OperandRegImmediate(REG_TMP0, 0xff),        "  1:");
+    GenAsm("", "sbci", OperandRegImmediate(REG_TMP1, 0xff),        "  1:");
+    GenAsm("", "sbci", OperandRegImmediate(REG_TMP2, 0xff),        "  1:");
+    GenAsm("", "sbci", OperandRegImmediate(REG_TMP3, 0xff),        "  1:");
+    GenAsm("", "st",   OperandStrReg("Z", REG_TMP0),               "  1:");
+    GenAsm("", "std",  OperandDispReg("Z", 1, REG_TMP1),           "  2:");
+    GenAsm("", "std",  OperandDispReg("Z", 2, REG_TMP2),           "  2:");
+    GenAsm("", "std",  OperandDispReg("Z", 3, REG_TMP3),           "  2:");
+}
+
+// ##########################################################################
+// #  Function: AVR_LoadRam32PreInc
+// #        Read contents of a RAM variable.
+// #        reg32 = *++Var*
+// #
+// #  Parameters:
+// #        <todo: params >
+// #
+// #  Returns:
+// #        <todo: return Value>
+// #
+// #  See Also:
+// #
+// ##########################################################################
+void  AVR_LoadRam32PreInc(int iReg, LPSTR pszVar) {
+    ASSERT((iReg & 3) == 0);
+    ASSERT(((iReg & 1) == 0) && (iReg > 15));
+    GenAsm("", "ldi",  OperandRegVar(30, pszVar),                    CommentString(1, "Z = &", pszVar));
+    GenAsm("", "ldi",  OperandRegVar(31, pszVar),                    "  1:");
+    GenAsm("", "ld",   OperandRegStr(iReg + REG_ORDER0, "Z"),        CommentString(1, "long <==  RAM @", pszVar));
+    GenAsm("", "ldd",  OperandRegDisp(iReg + REG_ORDER1, "Z", 1),    "  2:");
+    GenAsm("", "ldd",  OperandRegDisp(iReg + REG_ORDER2, "Z", 2),    "  2:");
+    GenAsm("", "ldd",  OperandRegDisp(iReg + REG_ORDER3, "Z", 3),    "  2:");
+    GenAsm("", "subi", OperandRegImmediate(iReg + REG_ORDER0, 0xff), "  1: pre inc");
+    GenAsm("", "sbci", OperandRegImmediate(iReg + REG_ORDER1, 0xff), "  1:");
+    GenAsm("", "sbci", OperandRegImmediate(iReg + REG_ORDER2, 0xff), "  1:");
+    GenAsm("", "sbci", OperandRegImmediate(iReg + REG_ORDER3, 0xff), "  1:");
+    GenAsm("", "st",   OperandStrReg("Z", iReg + REG_ORDER0),        "  1:");
+    GenAsm("", "std",  OperandDispReg("Z", 1, iReg + REG_ORDER1),    "  2:");
+    GenAsm("", "std",  OperandDispReg("Z", 2, iReg + REG_ORDER2),    "  2:");
+    GenAsm("", "std",  OperandDispReg("Z", 3, iReg + REG_ORDER3),    "  2:");
+}
+
+// ##########################################################################
+// #  Function: AVR_LoadRam32PostDec
+// #        Read contents of a RAM variable.
+// #        reg32 = *Var--*
+// #
+// #  Parameters:
+// #        <todo: params >
+// #
+// #  Returns:
+// #        <todo: return Value>
+// #
+// #  See Also:
+// #
+// ##########################################################################
+void  AVR_LoadRam32PostDec(int iReg, LPSTR pszVar) {
+    ASSERT((iReg & 3) == 0);
+    ASSERT(((iReg & 1) == 0) && (iReg > 15));
+    GenAsm("", "ldi", OperandRegVar(30, pszVar),                   CommentString(1, "Z = &", pszVar));
+    GenAsm("", "ldi", OperandRegVar(31, pszVar),                   "  1:");
+    GenAsm("", "ld",  OperandRegStr(iReg + REG_ORDER0,  "Z"),      CommentString(1, "long <==  RAM @", pszVar));
+    GenAsm("", "ldd", OperandRegDisp(iReg + REG_ORDER1, "Z", 1),   "  2:");
+    GenAsm("", "ldd", OperandRegDisp(iReg + REG_ORDER2, "Z", 2),   "  2:");
+    GenAsm("", "ldd", OperandRegDisp(iReg + REG_ORDER3, "Z", 3),   "  2:");
+    GenAsm("", "movw", OperandRegReg(REG_TMP0, iReg + REG_ORDER0), "  1: post dec");
+    GenAsm("", "movw", OperandRegReg(REG_TMP2, iReg + REG_ORDER2), "  1:");
+    GenAsm("", "subi", OperandRegImmediate(REG_TMP0, 0x01),        "  1:");
+    GenAsm("", "sbci", OperandRegImmediate(REG_TMP1, 0x00),        "  1:");
+    GenAsm("", "sbci", OperandRegImmediate(REG_TMP2, 0x00),        "  1:");
+    GenAsm("", "sbci", OperandRegImmediate(REG_TMP3, 0x00),        "  1:");
+    GenAsm("", "st",   OperandStrReg("Z", REG_TMP0),               "  1:");
+    GenAsm("", "std",  OperandDispReg("Z", 1, REG_TMP1),           "  2:");
+    GenAsm("", "std",  OperandDispReg("Z", 2, REG_TMP2),           "  2:");
+    GenAsm("", "std",  OperandDispReg("Z", 3, REG_TMP3),           "  2:");
+}
+
+// ##########################################################################
+// #  Function: AVR_LoadRam32PreDec
+// #        Read contents of a RAM variable.
+// #        reg32 = *--Var*
+// #
+// #  Parameters:
+// #        <todo: params >
+// #
+// #  Returns:
+// #        <todo: return Value>
+// #
+// #  See Also:
+// #
+// ##########################################################################
+void  AVR_LoadRam32PreDec(int iReg, LPSTR pszVar) {
+    ASSERT((iReg & 3) == 0);
+    ASSERT(((iReg & 1) == 0) && (iReg > 15));
+    GenAsm("", "ldi",  OperandRegVar(30, pszVar),                    CommentString(1, "Z = &", pszVar));
+    GenAsm("", "ldi",  OperandRegVar(31, pszVar),                    "  1:");
+    GenAsm("", "ld",   OperandRegStr(iReg + REG_ORDER0, "Z"),        CommentString(1, "long <==  RAM @", pszVar));
+    GenAsm("", "ldd",  OperandRegDisp(iReg + REG_ORDER1, "Z", 1),    "  2:");
+    GenAsm("", "ldd",  OperandRegDisp(iReg + REG_ORDER2, "Z", 2),    "  2:");
+    GenAsm("", "ldd",  OperandRegDisp(iReg + REG_ORDER3, "Z", 3),    "  2:");
+    GenAsm("", "subi", OperandRegImmediate(iReg + REG_ORDER0, 0x01), "  1: pre dec");
+    GenAsm("", "sbci", OperandRegImmediate(iReg + REG_ORDER1, 0x00), "  1:");
+    GenAsm("", "sbci", OperandRegImmediate(iReg + REG_ORDER2, 0x00), "  1:");
+    GenAsm("", "sbci", OperandRegImmediate(iReg + REG_ORDER3, 0x00), "  1:");
+    GenAsm("", "st",   OperandStrReg("Z", iReg + REG_ORDER0),        "  1:");
+    GenAsm("", "std",  OperandDispReg("Z", 1, iReg + REG_ORDER1),    "  2:");
+    GenAsm("", "std",  OperandDispReg("Z", 2, iReg + REG_ORDER2),    "  2:");
+    GenAsm("", "std",  OperandDispReg("Z", 3, iReg + REG_ORDER3),    "  2:");
+}
+
+
+
+// ##########################################################################
+// #  Function: AVR_StoreRam8
+// #        Save register to a RAM variable.
+// #        *Var = reg8*
+// #
+// #  Parameters:
+// #        <todo: params >
+// #
+// #  Returns:
+// #        <todo: return Value>
+// #
+// #  See Also:
+// #
+// ##########################################################################
+void AVR_StoreRam8(LPSTR pszVar, int iReg) {
+    ASSERT((iReg & 3) == 0);
+    GenAsm("", "ldi", OperandRegVar(30, pszVar),                 CommentString(1, "Z = &", pszVar));
+    GenAsm("", "ldi", OperandRegVar(31, pszVar),                 "  1:");
+    GenAsm("", "st",  OperandStrReg("Z", iReg + REG_ORDER0),     CommentString(1, "byte ==> RAM @", pszVar));
+}
+
+// ##########################################################################
+// #  Function: AVR_StoreRam16
+// #        Save register to a RAM variable.
+// #        *Var = reg16*
+// #
+// #  Parameters:
+// #        <todo: params >
+// #
+// #  Returns:
+// #        <todo: return Value>
+// #
+// #  See Also:
+// #
+// ##########################################################################
+void  AVR_StoreRam16(LPSTR pszVar, int iReg) {
+    ASSERT((iReg & 3) == 0);
+    GenAsm("", "ldi", OperandRegVar(30, pszVar),                 CommentString(1, "Z = &", pszVar));
+    GenAsm("", "ldi", OperandRegVar(31, pszVar),                 "  1:");
+    GenAsm("", "st",  OperandStrReg("Z", iReg + REG_ORDER0),     CommentString(1, "short ==> RAM @", pszVar));
+    GenAsm("", "std", OperandDispReg("Z", 1, iReg + REG_ORDER1), "  2:");
+}
+
+// ##########################################################################
+// #  Function: AVR_StoreRam32
+// #        Save register to a RAM variable.
+// #        *Var = reg32*
+// #
+// #  Parameters:
+// #        <todo: params >
+// #
+// #  Returns:
+// #        <todo: return Value>
+// #
+// #  See Also:
+// #
+// ##########################################################################
+void  AVR_StoreRam32(LPSTR pszVar, int iReg) {
+    ASSERT((iReg & 3) == 0);
+    GenAsm("", "ldi", OperandRegVar(30, pszVar),                 CommentString(1, "Z = &", pszVar));
+    GenAsm("", "ldi", OperandRegVar(31, pszVar),                 "  1:");
+    GenAsm("", "st",  OperandStrReg("Z", iReg + REG_ORDER0),     CommentString(1, "long ==> RAM @", pszVar));
+    GenAsm("", "std", OperandDispReg("Z", 1, iReg + REG_ORDER1), "  2:");
+    GenAsm("", "std", OperandDispReg("Z", 2, iReg + REG_ORDER2), "  2:");
+    GenAsm("", "std", OperandDispReg("Z", 3, iReg + REG_ORDER3), "  2:");
+}
+
+
+// ##########################################################################
+// #  Function: AVR_LoadFrame8
+// #        Read contents of a variable within the call frame.
+// #        *reg8 = Var*
+// #
+// #  Parameters:
+// #        <todo: params >
+// #
+// #  Returns:
+// #        <todo: return Value>
+// #
+// #  See Also:
+// #
+// ##########################################################################
+void AVR_LoadFrame8(int iReg, int iOffset, LPSTR pszVar) {
+    ASSERT((iReg & 3) == 0);
+    GenAsm("", "ldd", OperandRegDisp(iReg + REG_ORDER0, "Y", iGlbLocalSize + iOffset), CommentString(2, "reg8 <==", pszVar));
+}
+
+// ##########################################################################
+// #  Function: AVR_LoadFrame8PostInc
+// #        Read contents of a variable within the call frame.
+// #        *reg8 = Var++*
+// #
+// #  Parameters:
+// #        <todo: params >
+// #
+// #  Returns:
+// #        <todo: return Value>
+// #
+// #  See Also:
+// #
+// ##########################################################################
+void AVR_LoadFrame8PostInc(int iReg, int iOffset, LPSTR pszVar) {
+    ASSERT((iReg & 3) == 0);
+    ASSERT(iOffset < 64);
+    GenAsm("", "ldd", OperandRegDisp(iReg + REG_ORDER0, "Y", iGlbLocalSize + iOffset), CommentString(2, "reg8 <==", pszVar));
+    GenAsm("", "mov", OperandRegReg(REG_TMP0, iReg + REG_ORDER0),                      "  1: post inc");
+    GenAsm("", "inc", OperandReg(REG_TMP0),                                            "  1:");
+    GenAsm("", "std", OperandDispReg("Y", iGlbLocalSize + iOffset, REG_TMP0),          "  2:");
+}
+
+// ##########################################################################
+// #  Function: AVR_LoadFrame8PostDec
+// #        Read contents of a variable within the call frame.
+// #        *reg8 = Var--*
+// #
+// #  Parameters:
+// #        <todo: params >
+// #
+// #  Returns:
+// #        <todo: return Value>
+// #
+// #  See Also:
+// #
+// ##########################################################################
+void AVR_LoadFrame8PostDec(int iReg, int iOffset, LPSTR pszVar) {
+    ASSERT((iReg & 3) == 0);
+    ASSERT(iOffset < 64);
+    GenAsm("", "ldd", OperandRegDisp(iReg + REG_ORDER0, "Y", iGlbLocalSize + iOffset), CommentString(2, "reg8 <==", pszVar));
+    GenAsm("", "mov", OperandRegReg(REG_TMP0, iReg + REG_ORDER0),                      "  1: post dec");
+    GenAsm("", "dec", OperandReg(REG_TMP0),                                            "  1:");
+    GenAsm("", "std", OperandDispReg("Y", iGlbLocalSize + iOffset, REG_TMP0),          "  2:");
+}
+
+// ##########################################################################
+// #  Function: AVR_LoadFrame8PreInc
+// #        Read contents of a variable within the call frame.
+// #        *reg8 = ++Var*
+// #
+// #  Parameters:
+// #        <todo: params >
+// #
+// #  Returns:
+// #        <todo: return Value>
+// #
+// #  See Also:
+// #
+// ##########################################################################
+void AVR_LoadFrame8PreInc(int iReg, int iOffset, LPSTR pszVar) {
+    ASSERT((iReg & 3) == 0);
+    ASSERT(iOffset < 64);
+    GenAsm("", "ldd", OperandRegDisp(iReg + REG_ORDER0, "Y", iGlbLocalSize + iOffset), CommentString(2, "reg8 <==", pszVar));
+    GenAsm("", "inc", OperandReg(iReg + REG_ORDER0),                                   "  1: pre inc");
+    GenAsm("", "std", OperandDispReg("Y", iGlbLocalSize + iOffset, iReg + REG_ORDER0), "  2:");
+}
+
+// ##########################################################################
+// #  Function: AVR_LoadFrame8PreDec
+// #        Read contents of a variable within the call frame.
+// #        *reg8 = --Var*
+// #
+// #  Parameters:
+// #        <todo: params >
+// #
+// #  Returns:
+// #        <todo: return Value>
+// #
+// #  See Also:
+// #
+// ##########################################################################
+void AVR_LoadFrame8PreDec(int iReg, int iOffset, LPSTR pszVar) {
+    ASSERT((iReg & 3) == 0);
+    ASSERT(iOffset < 64);
+    GenAsm("", "ldd", OperandRegDisp(iReg + REG_ORDER0, "Y", iGlbLocalSize + iOffset), CommentString(2, "reg8 <==", pszVar));
+    GenAsm("", "dec", OperandReg(iReg + REG_ORDER0),                                   "  1: pre dec");
+    GenAsm("", "std", OperandDispReg("Y", iGlbLocalSize + iOffset, iReg + REG_ORDER0), "  2:");
+}
+
+
+
+// ##########################################################################
+// #  Function: AVR_LoadFrame16
+// #        Read contents of a variable within the call frame.
+// #        *reg8 = Var*
+// #
+// #  Parameters:
+// #        <todo: params >
+// #
+// #  Returns:
+// #        <todo: return Value>
+// #
+// #  See Also:
+// #
+// ##########################################################################
+void  AVR_LoadFrame16(int iReg, int iOffset, LPSTR pszVar) {
+    ASSERT((iReg & 3) == 0);
+    ASSERT(((iReg & 1) == 0) && (iReg > 15) && (iOffset < 64));
+    GenAsm("", "ldd", OperandRegDisp(iReg + REG_ORDER0,  "Y", iGlbLocalSize + iOffset),     CommentString(2, "reg16 <==", pszVar));
+    GenAsm("", "ldd", OperandRegDisp(iReg + REG_ORDER1 , "Y", iGlbLocalSize + iOffset+1),   "  2:");
+}
+
+// ##########################################################################
+// #  Function: AVR_LoadFrame16PostInc
+// #        Read contents of a variable within the call frame.
+// #        *reg8 = Var++*
+// #
+// #  Parameters:
+// #        <todo: params >
+// #
+// #  Returns:
+// #        <todo: return Value>
+// #
+// #  See Also:
+// #
+// ##########################################################################
+void  AVR_LoadFrame16PostInc(int iReg, int iOffset, LPSTR pszVar) {
+    ASSERT((iReg & 3) == 0);
+    ASSERT(((iReg & 1) == 0) && (iReg > 15) && (iOffset < 64));
+    GenAsm("", "ldd",  OperandRegDisp(iReg + REG_ORDER0, "Y", iGlbLocalSize + iOffset),     CommentString(2, "reg16 <==", pszVar));
+    GenAsm("", "ldd",  OperandRegDisp(iReg + REG_ORDER1, "Y", iGlbLocalSize + iOffset + 1), "  2:");
+    GenAsm("", "movw", OperandRegReg(REG_TMP0, iReg + REG_ORDER0),                          "  1: post inc");
+    GenAsm("", "adiw", OperandRegImmediate(REG_TMP0, 1),                                    "  1:");
+    GenAsm("", "std",  OperandDispReg("Y", iGlbLocalSize + iOffset, REG_TMP0),              "  2:");
+    GenAsm("", "std",  OperandDispReg("Y", iGlbLocalSize + iOffset + 1, REG_TMP1),          "  2:");
+}
+
+// ##########################################################################
+// #  Function: AVR_LoadFrame16PostDec
+// #        Read contents of a variable within the call frame.
+// #        *reg8 = Var--*
+// #
+// #  Parameters:
+// #        <todo: params >
+// #
+// #  Returns:
+// #        <todo: return Value>
+// #
+// #  See Also:
+// #
+// ##########################################################################
+void  AVR_LoadFrame16PostDec(int iReg, int iOffset, LPSTR pszVar) {
+    ASSERT((iReg & 3) == 0);
+    ASSERT(((iReg & 1) == 0) && (iReg > 15) && (iOffset < 64));
+    GenAsm("", "ldd",  OperandRegDisp(iReg + REG_ORDER0, "Y", iGlbLocalSize + iOffset),     CommentString(2, "reg16 <==", pszVar));
+    GenAsm("", "ldd",  OperandRegDisp(iReg + REG_ORDER1, "Y", iGlbLocalSize + iOffset + 1), "  2:");
+    GenAsm("", "movw", OperandRegReg(REG_TMP0, iReg + REG_ORDER0),                          "  1: post dec");
+    GenAsm("", "sbiw", OperandRegImmediate(REG_TMP0, 1),                                    "  1:");
+    GenAsm("", "std",  OperandDispReg("Y", iGlbLocalSize + iOffset, REG_TMP0),              "  2:");
+    GenAsm("", "std",  OperandDispReg("Y", iGlbLocalSize + iOffset + 1, REG_TMP1),          "  2:");
+}
+
+// ##########################################################################
+// #  Function: AVR_LoadFrame16PreInc
+// #        Read contents of a variable within the call frame.
+// #        *reg8 = ++Var*
+// #
+// #  Parameters:
+// #        <todo: params >
+// #
+// #  Returns:
+// #        <todo: return Value>
+// #
+// #  See Also:
+// #
+// ##########################################################################
+void  AVR_LoadFrame16PreInc(int iReg, int iOffset, LPSTR pszVar) {
+    ASSERT((iReg & 3) == 0);
+    ASSERT(((iReg & 1) == 0) && (iReg > 15) && (iOffset < 64));
+    GenAsm("", "ldd", OperandRegDisp(iReg + REG_ORDER0, "Y", iGlbLocalSize + iOffset),      CommentString(2, "reg16 <==", pszVar));
+    GenAsm("", "ldd", OperandRegDisp(iReg + REG_ORDER1, "Y", iGlbLocalSize + iOffset + 1),  "  2:");
+    GenAsm("", "subi", OperandRegImmediate(iReg + REG_ORDER0, 0xff),                        "  1: pre inc");
+    GenAsm("", "sbci", OperandRegImmediate(iReg + REG_ORDER1, 0xff),                        "  1:");
+    GenAsm("", "std",  OperandDispReg("Y", iGlbLocalSize + iOffset, iReg + REG_ORDER0),     "  2:");
+    GenAsm("", "std",  OperandDispReg("Y", iGlbLocalSize + iOffset + 1, iReg + REG_ORDER1), "  2:");
+}
+
+// ##########################################################################
+// #  Function: AVR_LoadFrame16PreDec
+// #        Read contents of a variable within the call frame.
+// #        *reg8 = --Var*
+// #
+// #  Parameters:
+// #        <todo: params >
+// #
+// #  Returns:
+// #        <todo: return Value>
+// #
+// #  See Also:
+// #
+// ##########################################################################
+void  AVR_LoadFrame16PreDec(int iReg, int iOffset, LPSTR pszVar) {
+    ASSERT((iReg & 3) == 0);
+    ASSERT(((iReg & 1) == 0) && (iReg > 15) && (iOffset < 64));
+    GenAsm("", "ldd", OperandRegDisp(iReg + REG_ORDER0, "Y", iGlbLocalSize + iOffset),      CommentString(2, "reg16 <== ", pszVar));
+    GenAsm("", "ldd", OperandRegDisp(iReg + REG_ORDER1, "Y", iGlbLocalSize + iOffset + 1),  "  2:");
+    GenAsm("", "subi", OperandRegImmediate(iReg + REG_ORDER0, 0x01),                        "  1: pre dec");
+    GenAsm("", "sbci", OperandRegImmediate(iReg + REG_ORDER1, 0x00),                        "  1:");
+    GenAsm("", "std",  OperandDispReg("Y", iGlbLocalSize + iOffset, iReg + REG_ORDER0),     "  2:");
+    GenAsm("", "std",  OperandDispReg("Y", iGlbLocalSize + iOffset + 1, iReg + REG_ORDER1), "  2:");
+}
+
+
+// ##########################################################################
+// #  Function: AVR_LoadFrame32
+// #        Read contents of a variable within the call frame.
+// #        *reg8 = Var*
+// #
+// #  Parameters:
+// #        <todo: params >
+// #
+// #  Returns:
+// #        <todo: return Value>
+// #
+// #  See Also:
+// #
+// ##########################################################################
+void  AVR_LoadFrame32(int iReg, int iOffset, LPSTR pszVar) {
+    ASSERT((iReg & 3) == 0);
+    GenAsm("", "ldd", OperandRegDisp(iReg + REG_ORDER0, "Y", iGlbLocalSize + iOffset),     CommentString(2, "reg32 <== ", pszVar));
+    GenAsm("", "ldd", OperandRegDisp(iReg + REG_ORDER1, "Y", iGlbLocalSize + iOffset + 1), "  2:");
+    GenAsm("", "ldd", OperandRegDisp(iReg + REG_ORDER2, "Y", iGlbLocalSize + iOffset + 2), "  2:");
+    GenAsm("", "ldd", OperandRegDisp(iReg + REG_ORDER3, "Y", iGlbLocalSize + iOffset + 3), "  2:");
+}
+
+// ##########################################################################
+// #  Function: AVR_LoadFrame32PostInc
+// #        Read contents of a variable within the call frame.
+// #        *reg8 = Var++*
+// #
+// #  Parameters:
+// #        <todo: params >
+// #
+// #  Returns:
+// #        <todo: return Value>
+// #
+// #  See Also:
+// #
+// ##########################################################################
+void  AVR_LoadFrame32PostInc(int iReg, int iOffset, LPSTR pszVar) {
+    ASSERT((iReg & 3) == 0);
+    ASSERT(((iReg & 1) == 0) && (iReg > 15) && (iOffset < 64));
+    GenAsm("", "ldd", OperandRegDisp(iReg + REG_ORDER0, "Y", iGlbLocalSize + iOffset),     CommentString(2, "reg32 <== ", pszVar));
+    GenAsm("", "ldd", OperandRegDisp(iReg + REG_ORDER1, "Y", iGlbLocalSize + iOffset + 1), "  2:");
+    GenAsm("", "ldd", OperandRegDisp(iReg + REG_ORDER2, "Y", iGlbLocalSize + iOffset + 2), "  2:");
+    GenAsm("", "ldd", OperandRegDisp(iReg + REG_ORDER3, "Y", iGlbLocalSize + iOffset + 3), "  2:");
+    GenAsm("", "movw", OperandRegReg(REG_TMP0, iReg + REG_ORDER0),                         "  1: post inc");
+    GenAsm("", "movw", OperandRegReg(REG_TMP2, iReg + REG_ORDER2),                         "  1:");
+    GenAsm("", "subi", OperandRegImmediate(REG_TMP0, 0xff),                                "  1:");
+    GenAsm("", "sbci", OperandRegImmediate(REG_TMP1, 0xff),                                "  1:");
+    GenAsm("", "sbci", OperandRegImmediate(REG_TMP2, 0xff),                                "  1:");
+    GenAsm("", "sbci", OperandRegImmediate(REG_TMP3, 0xff),                                "  1:");
+    GenAsm("", "std",  OperandDispReg("Y", iGlbLocalSize + iOffset,     REG_TMP0),         "  2:");
+    GenAsm("", "std",  OperandDispReg("Y", iGlbLocalSize + iOffset + 1, REG_TMP1),         "  2:");
+    GenAsm("", "std",  OperandDispReg("Y", iGlbLocalSize + iOffset + 2, REG_TMP2),         "  2:");
+    GenAsm("", "std",  OperandDispReg("Y", iGlbLocalSize + iOffset + 3, REG_TMP3),         "  2:");
+}
+
+// ##########################################################################
+// #  Function: AVR_LoadFrame32PostDec
+// #        Read contents of a variable within the call frame.
+// #        *reg8 = Var--*
+// #
+// #  Parameters:
+// #        <todo: params >
+// #
+// #  Returns:
+// #        <todo: return Value>
+// #
+// #  See Also:
+// #
+// ##########################################################################
+void  AVR_LoadFrame32PostDec(int iReg, int iOffset, LPSTR pszVar) {
+    ASSERT((iReg & 3) == 0);
+    ASSERT(((iReg & 1) == 0) && (iReg > 15) && (iOffset < 64));
+    GenAsm("", "ldd", OperandRegDisp(iReg + REG_ORDER0, "Y", iGlbLocalSize + iOffset),     CommentString(2, "reg32 <== ", pszVar));
+    GenAsm("", "ldd", OperandRegDisp(iReg + REG_ORDER1, "Y", iGlbLocalSize + iOffset + 1), "  2:");
+    GenAsm("", "ldd", OperandRegDisp(iReg + REG_ORDER2, "Y", iGlbLocalSize + iOffset + 2), "  2:");
+    GenAsm("", "ldd", OperandRegDisp(iReg + REG_ORDER3, "Y", iGlbLocalSize + iOffset + 3), "  2:");
+    GenAsm("", "movw", OperandRegReg(REG_TMP0, iReg + REG_ORDER0),                         "  1: post dec");
+    GenAsm("", "movw", OperandRegReg(REG_TMP2, iReg + REG_ORDER2),                         "  1:");
+    GenAsm("", "subi", OperandRegImmediate(REG_TMP0, 0x01),                                "  1:");
+    GenAsm("", "sbci", OperandRegImmediate(REG_TMP1, 0x00),                                "  1:");
+    GenAsm("", "sbci", OperandRegImmediate(REG_TMP2, 0x00),                                "  1:");
+    GenAsm("", "sbci", OperandRegImmediate(REG_TMP3, 0x00),                                "  1:");
+    GenAsm("", "std",  OperandDispReg("Y", iGlbLocalSize + iOffset,     REG_TMP0),         "  2:");
+    GenAsm("", "std",  OperandDispReg("Y", iGlbLocalSize + iOffset + 1, REG_TMP1),         "  2:");
+    GenAsm("", "std",  OperandDispReg("Y", iGlbLocalSize + iOffset + 2, REG_TMP2),         "  2:");
+    GenAsm("", "std",  OperandDispReg("Y", iGlbLocalSize + iOffset + 3, REG_TMP3),         "  2:");
+}
+
+// ##########################################################################
+// #  Function: AVR_LoadFrame32PreInc
+// #        Read contents of a variable within the call frame.
+// #        *reg8 = ++Var*
+// #
+// #  Parameters:
+// #        <todo: params >
+// #
+// #  Returns:
+// #        <todo: return Value>
+// #
+// #  See Also:
+// #
+// ##########################################################################
+void  AVR_LoadFrame32PreInc(int iReg, int iOffset, LPSTR pszVar) {
+    ASSERT((iReg & 3) == 0);
+    ASSERT(((iReg & 1) == 0) && (iReg > 15) && (iOffset < 64));
+    GenAsm("", "ldd", OperandRegDisp(iReg + REG_ORDER0, "Y", iGlbLocalSize + iOffset),     CommentString(2, "reg32 <== ", pszVar));
+    GenAsm("", "ldd", OperandRegDisp(iReg + REG_ORDER1, "Y", iGlbLocalSize + iOffset + 1), "  2:");
+    GenAsm("", "ldd", OperandRegDisp(iReg + REG_ORDER2, "Y", iGlbLocalSize + iOffset + 2), "  2:");
+    GenAsm("", "ldd", OperandRegDisp(iReg + REG_ORDER3, "Y", iGlbLocalSize + iOffset + 3), "  2:");
+    GenAsm("", "subi", OperandRegImmediate(iReg + REG_ORDER0, 0xff),                       "  1: pre inc");
+    GenAsm("", "sbci", OperandRegImmediate(iReg + REG_ORDER1, 0xff),                       "  1:");
+    GenAsm("", "sbci", OperandRegImmediate(iReg + REG_ORDER2, 0xff),                       "  1:");
+    GenAsm("", "sbci", OperandRegImmediate(iReg + REG_ORDER3, 0xff),                       "  1:");
+    GenAsm("", "std",  OperandDispReg("Y", iGlbLocalSize + iOffset,     iReg + REG_ORDER0),"  2:");
+    GenAsm("", "std",  OperandDispReg("Y", iGlbLocalSize + iOffset + 1, iReg + REG_ORDER1),"  2:");
+    GenAsm("", "std",  OperandDispReg("Y", iGlbLocalSize + iOffset + 2, iReg + REG_ORDER2),"  2:");
+    GenAsm("", "std",  OperandDispReg("Y", iGlbLocalSize + iOffset + 3, iReg + REG_ORDER3),"  2:");
+}
+
+// ##########################################################################
+// #  Function: AVR_LoadFrame32PreDec
+// #        Read contents of a variable within the call frame.
+// #        *reg8 = --Var*
+// #
+// #  Parameters:
+// #        <todo: params >
+// #
+// #  Returns:
+// #        <todo: return Value>
+// #
+// #  See Also:
+// #
+// ##########################################################################
+void  AVR_LoadFrame32PreDec(int iReg, int iOffset, LPSTR pszVar) {
+    ASSERT((iReg & 3) == 0);
+    ASSERT(((iReg & 1) == 0) && (iReg > 15) && (iOffset < 64));
+    GenAsm("", "ldd", OperandRegDisp(iReg + REG_ORDER0, "Y", iGlbLocalSize + iOffset),     CommentString(2, "reg32 <== ", pszVar));
+    GenAsm("", "ldd", OperandRegDisp(iReg + REG_ORDER1, "Y", iGlbLocalSize + iOffset + 1), "  2:");
+    GenAsm("", "ldd", OperandRegDisp(iReg + REG_ORDER2, "Y", iGlbLocalSize + iOffset + 2), "  2:");
+    GenAsm("", "ldd", OperandRegDisp(iReg + REG_ORDER3, "Y", iGlbLocalSize + iOffset + 3), "  2:");
+    GenAsm("", "subi", OperandRegImmediate(iReg + REG_ORDER0, 0x01),                       "  1: pre dec");
+    GenAsm("", "sbci", OperandRegImmediate(iReg + REG_ORDER1, 0x00),                       "  1:");
+    GenAsm("", "sbci", OperandRegImmediate(iReg + REG_ORDER2, 0x00),                       "  1:");
+    GenAsm("", "sbci", OperandRegImmediate(iReg + REG_ORDER3, 0x00),                       "  1:");
+    GenAsm("", "std",  OperandDispReg("Y", iGlbLocalSize + iOffset,     iReg + REG_ORDER0),"  2:");
+    GenAsm("", "std",  OperandDispReg("Y", iGlbLocalSize + iOffset + 1, iReg + REG_ORDER1),"  2:");
+    GenAsm("", "std",  OperandDispReg("Y", iGlbLocalSize + iOffset + 2, iReg + REG_ORDER2),"  2:");
+    GenAsm("", "std",  OperandDispReg("Y", iGlbLocalSize + iOffset + 3, iReg + REG_ORDER3),"  2:");
+}
+
+// ##########################################################################
+// #  Function: AVR_StoreFrame8
+// #        Store a value in the call frame.
+// #        *var = reg8*
+// #
+// #  Parameters:
+// #        <todo: params >
+// #
+// #  Returns:
+// #        <todo: return Value>
+// #
+// #  See Also:
+// #
+// ##########################################################################
+void AVR_StoreFrame8(int iOffset, int iReg, LPSTR pszVar) {
+    ASSERT((iReg & 3) == 0);
+    GenAsm("", "std", OperandDispReg("Y", iGlbLocalSize + iOffset,   iReg + REG_ORDER0),   CommentString(2, "reg8 ==> ", pszVar));
+}
+
+// ##########################################################################
+// #  Function: AVR_StoreFrame16
+// #        Store a value in the call frame.
+// #        *var = reg16*
+// #
+// #  Parameters:
+// #        <todo: params >
+// #
+// #  Returns:
+// #        <todo: return Value>
+// #
+// #  See Also:
+// #
+// ##########################################################################
+void  AVR_StoreFrame16(int iOffset, int iReg, LPSTR pszVar) {
+    ASSERT((iReg & 3) == 0);
+    GenAsm("", "std", OperandDispReg("Y", iGlbLocalSize + iOffset,   iReg + REG_ORDER0), CommentString(2, "reg16 ==> ", pszVar));
+    GenAsm("", "std", OperandDispReg("Y", iGlbLocalSize + iOffset+1, iReg + REG_ORDER1), "  2:");
+}
+
+// ##########################################################################
+// #  Function: AVR_StoreFrame32
+// #        Store a value in the call frame.
+// #        *var = reg32*
+// #
+// #  Parameters:
+// #        <todo: params >
+// #
+// #  Returns:
+// #        <todo: return Value>
+// #
+// #  See Also:
+// #
+// ##########################################################################
+void  AVR_StoreFrame32(int iOffset, int iReg, LPSTR pszVar) {
+    ASSERT((iReg & 3) == 0);
+    GenAsm("", "std", OperandDispReg("Y", iGlbLocalSize + iOffset,   iReg + REG_ORDER0), CommentString(2, "reg32 ==> ", pszVar));
+    GenAsm("", "std", OperandDispReg("Y", iGlbLocalSize + iOffset+1, iReg + REG_ORDER1), "  2:");
+    GenAsm("", "std", OperandDispReg("Y", iGlbLocalSize + iOffset+2, iReg + REG_ORDER2), "  2:");
+    GenAsm("", "std", OperandDispReg("Y", iGlbLocalSize + iOffset+3, iReg + REG_ORDER3), "  2:");
+}
+
+// ############################################################################################
+
+// ##########################################################################
+// #  Function: GenAdd
+// #        <todo: task brief description>
+// #
+// #        <todo: task detailed description>
+// #
+// #  Parameters:
+// #        <todo: params >
+// #
+// #  Returns:
+// #        <todo: return Value>
+// #
+// #  See Also:
+// #
+// ##########################################################################
+void GenAdd(TPExprNode pExpr) {
+
+    TPExprNode pLeft = pExpr->Use.Binary.pLeft;                                 // Left
+    TPExprNode pRight = pExpr->Use.Binary.pRight;                               // Right
+    int iLeftSize = CalcSizeOf(pLeft->pType);                                   //
+    int iRightSize = CalcSizeOf(pRight->pType);                                 //
+    ASSERT(iLeftSize == iRightSize);                                            // Confirm sizes match. This should be correct because of the initial parsing phase.
+    GenExpr(pLeft);                                                             // Generate Left.
+    AVR_Push(REG_ACC, iLeftSize);
+    GenExpr(pRight);                                                            // Generate Right.
+    AVR_Pop(REG_TMP, iLeftSize);
+#pragma message("    GenAdd: right var = const is a common special case.")
+
+    switch (iLeftSize) {
+    case 1: 
+        GenAsm("", "add", OperandRegReg(REG_ACC0, REG_TMP0), "  1: Add 8");
+        break;
+    case 2:
+        GenAsm("", "add", OperandRegReg(REG_ACC0, REG_TMP0),  "  1: Add 16");
+        GenAsm("", "adc", OperandRegReg(REG_ACC1, REG_TMP1),  "  1:");
+        break;
+    case 4:
+        GenAsm("", "add", OperandRegReg(REG_ACC0, REG_TMP0),  "  1:: Add 32");
+        GenAsm("", "adc", OperandRegReg(REG_ACC1, REG_TMP1),  "  1:");
+        GenAsm("", "adc", OperandRegReg(REG_ACC2, REG_TMP2),  "  1:");
+        GenAsm("", "adc", OperandRegReg(REG_ACC3, REG_TMP3),  "  1:");
+        break;
+    default:
+        Error(FATAL, "GenAdd: size not supported (%d)\n", iLeftSize);
+    }
+}
+
+// ##########################################################################
+// #  Function: GenSub
+// #        <todo: task brief description>
+// #
+// #        <todo: task detailed description>
+// #
+// #  Parameters:
+// #        <todo: params >
+// #
+// #  Returns:
+// #        <todo: return Value>
+// #
+// #  See Also:
+// #
+// ##########################################################################
+void GenSub(TPExprNode pExpr) {
+
+    TPExprNode pLeft = pExpr->Use.Binary.pLeft;                                 // Left
+    TPExprNode pRight = pExpr->Use.Binary.pRight;                               // Right
+    int iLeftSize = CalcSizeOf(pLeft->pType);                                   //
+    int iRightSize = CalcSizeOf(pRight->pType);                                 //
+    ASSERT(iLeftSize == iRightSize);                                            // Confirm sizes match. This should be correct because of the initial parsing phase.
+    
+    GenExpr(pLeft);                                                             // Generate Left.
+    AVR_Push(REG_ACC, iLeftSize);
+    GenExpr(pRight);                                                            // Generate Right.
+    AVR_Move(REG_TMP, REG_ACC, iLeftSize);
+    AVR_Pop(REG_ACC, iLeftSize);
+#pragma message("    GenSub: right var = const is a common special case.")
+
+    switch (iLeftSize) {
+    case 1:
+        GenAsm("", "sub", OperandRegReg(REG_ACC0, REG_TMP0),  "  1: Sub 8");
+        break;
+    case 2:
+        GenAsm("", "sub", OperandRegReg(REG_ACC0, REG_TMP0), "  1: Sub 16");
+        GenAsm("", "sbc", OperandRegReg(REG_ACC1, REG_TMP1), "  1:");
+        break;
+    case 4:
+        GenAsm("", "sub", OperandRegReg(REG_ACC0, REG_TMP0), "  1: Sub 32");
+        GenAsm("", "sbc", OperandRegReg(REG_ACC1, REG_TMP1), "  1:");
+        GenAsm("", "sbc", OperandRegReg(REG_ACC2, REG_TMP2), "  1:");
+        GenAsm("", "sbc", OperandRegReg(REG_ACC3, REG_TMP3), "  1:");
+        break;
+    default:
+        Error(FATAL, "GenSub: size not supported (%d)\n", iLeftSize);
+    }
+}
+
+// ##########################################################################
+// #  Function: GenMul
+// #        <todo: task brief description>
+// #
+// #        <todo: task detailed description>
+// #
+// #  Parameters:
+// #        <todo: params >
+// #
+// #  Returns:
+// #        <todo: return Value>
+// #
+// #  See Also:
+// #
+// ##########################################################################
+void GenMul(TPExprNode pExpr) {
+
+    TPExprNode pLeft = pExpr->Use.Binary.pLeft;                                 // Left
+    TPExprNode pRight = pExpr->Use.Binary.pRight;                               // Right
+    int iLeftSize = CalcSizeOf(pLeft->pType);                                   //
+    int iRightSize = CalcSizeOf(pRight->pType);                                 //
+    ASSERT(iLeftSize == iRightSize);                                            // Confirm sizes match. This should be correct because of the initial parsing phase.
+
+    GenExpr(pLeft);                                                             // Generate Left.
+    AVR_Push(REG_ACC, iLeftSize);
+    GenExpr(pRight);                                                            // Generate Right.
+    AVR_Pop(REG_TMP, iLeftSize);
+#pragma message("    GenMul: right var = const is a common special case.")
+
+    LPSTR   szMulLoop = GenLabel("_MulMult_");
+    LPSTR   szMulDone = GenLabel("_MulDone_");
+
+    switch (iLeftSize) {
+    case 1:
+        GenAsm("",        "clr",  OperandReg(0),                    "  1: Mul 8");
+        GenAsm(szMulLoop, "sbrc", OperandRegImmediate(REG_ACC0, 0), "1/3:");
+        GenAsm("",        "add",  OperandRegReg(0, REG_TMP0),       "  1:");
+        GenAsm("",        "lsl",  OperandReg(REG_TMP0),             "  1:");
+        GenAsm("",        "breq", szMulDone,                        "1/2:");
+        GenAsm("",        "lsr",  OperandReg(REG_ACC0),             "  1:");
+        GenAsm("",        "brne", szMulLoop,                        "1/2:");
+        GenAsm(szMulDone, "mov",  OperandRegReg(REG_ACC0, 0),       "  1:");
+        break;
+    case 2:
+        GenAsm("", "rcall","SysMul16",                              " +3: Mul 16");     // REG_ACC0,1 *= REG_TMP0,1
+        break;
+    case 4:
+        GenAsm("", "rcall","SysMul32",                              " +3: Mul 32");     // REG_ACC0-3 *= REG_TMP0-3
+        break;
+    default:
+        Error(FATAL, "GenMul: size not supported (%d)\n", iLeftSize);
+    }
+}
+
+
+// ##########################################################################
+// #  Function: GenDiv
+// #        <todo: task brief description>
+// #
+// #        <todo: task detailed description>
+// #
+// #  Parameters:
+// #        <todo: params >
+// #
+// #  Returns:
+// #        <todo: return Value>
+// #
+// #  See Also:
+// #
+// ##########################################################################
+void GenDiv(TPExprNode pExpr) {
+
+    TPExprNode pLeft = pExpr->Use.Binary.pLeft;                                 // Left
+    TPExprNode pRight = pExpr->Use.Binary.pRight;                               // Right
+    int iLeftSize = CalcSizeOf(pLeft->pType);                                   //
+    int iRightSize = CalcSizeOf(pRight->pType);                                 //
+    ASSERT(iLeftSize == iRightSize);                                            // Confirm sizes match. This should be correct because of the initial parsing phase.
+
+    GenExpr(pLeft);                                                             // Generate Left.
+    AVR_Push(REG_ACC, iLeftSize);
+    GenExpr(pRight);                                                            // Generate Right.
+    AVR_Move(REG_TMP, REG_ACC, iLeftSize);
+    AVR_Pop(REG_ACC, iLeftSize);
+#pragma message("    GenDiv: right var = const is a common special case.")
+
+    LPSTR   szDivLoop = GenLabel("_DivLoop_");
+    LPSTR   szDivEntr = GenLabel("_DivEntr_");
+
+    switch (iLeftSize) {
+    case 1:
+        GenAsm("",        "clr",  OperandReg(REG_TMP1),              "  1: Div 8");   // unsigned
+        GenAsm("",        "ldi",  OperandRegImmediate(REG_ACC3,9),   "  1:");
+        GenAsm("",        "rjmp", szDivEntr,                         "  2:");
+        GenAsm(szDivLoop, "rol",  OperandReg(REG_TMP1),              "  1:");
+        GenAsm("",        "cp",   OperandRegReg(REG_TMP1, REG_TMP0), "  1:");
+        GenAsm("",        "brcs", szDivEntr,                         "1/3:");
+        GenAsm("",        "sub",  OperandRegReg(REG_TMP1, REG_TMP0), "  1:");
+        GenAsm(szDivEntr, "rol",  OperandReg(REG_ACC0),              "  1:");
+        GenAsm("",        "dec",  OperandReg(REG_ACC3),              "  1:");
+        GenAsm("",        "brne", szDivLoop,                         "  1:");
+        GenAsm("",        "com",  OperandReg(REG_ACC0),              "  1:");
+        break;
+    case 2:
+        GenAsm("", "rcall","SysDiv16",                          " +3: Div 1");                   // REG_ACC0,1 *= REG_TMP0,1, r0 = remainder
+        break;
+    case 4:
+        GenAsm("", "rcall","SysDiv32",                          " +3: Div 32");                  // REG_ACC0,1 *= REG_TMP0,1, r0 = remainder
+        break;
+    default:
+        Error(FATAL, "GenDiv: size not supported (%d)\n", iLeftSize);
+    }
+}
+
+// ##########################################################################
+// #  Function: GenMod
+// #        <todo: task brief description>
+// #
+// #        <todo: task detailed description>
+// #
+// #  Parameters:
+// #        <todo: params >
+// #
+// #  Returns:
+// #        <todo: return Value>
+// #
+// #  See Also:
+// #
+// ##########################################################################
+void GenMod(TPExprNode pExpr) {
+
+    TPExprNode pLeft = pExpr->Use.Binary.pLeft;                                 // Left
+    TPExprNode pRight = pExpr->Use.Binary.pRight;                               // Right
+    int iLeftSize = CalcSizeOf(pLeft->pType);                                   //
+    int iRightSize = CalcSizeOf(pRight->pType);                                 //
+    ASSERT(iLeftSize == iRightSize);                                            // Confirm sizes match. This should be correct because of the initial parsing phase.
+
+    GenExpr(pLeft);                                                             // Generate Left.
+    AVR_Push(REG_ACC, iLeftSize);
+    GenExpr(pRight);                                                            // Generate Right.
+    AVR_Move(REG_TMP, REG_ACC, iLeftSize);
+    AVR_Pop(REG_ACC, iLeftSize);
+#pragma message("    GenMod: right var = const is a common special case.")
+
+    LPSTR   szModLoop = GenLabel("_ModLoop_");
+    LPSTR   szModEntr = GenLabel("_ModEntr_");
+
+    switch (iLeftSize) {
+    case 1:
+        GenAsm("",        "clr",  OperandReg(REG_TMP1),             "  1: Mod 8");
+        GenAsm("",        "ldi",  OperandRegImmediate(REG_ACC3, 9), "  1:");
+        GenAsm("",        "rjmp", szModEntr,                        "  2:");
+        GenAsm(szModLoop, "rol",  OperandReg(REG_TMP1),             "  1:");
+        GenAsm("",        "cp",   OperandRegReg(REG_TMP1, REG_TMP0),"  1:");
+        GenAsm("",        "brcs", szModEntr,                        "1/3:");
+        GenAsm("",        "sub",  OperandRegReg(REG_TMP1, REG_TMP0),"  1:");
+        GenAsm(szModEntr, "rol",  OperandReg(REG_ACC0),             "  1:");
+        GenAsm("",        "dec",  OperandReg(REG_ACC3),             "  1:");
+        GenAsm("",        "brne", szModLoop,                        "  1:");
+        GenAsm("",        "mov",  OperandRegReg(REG_ACC0, 0),       "  1:");
+        break;
+    case 2:
+        GenAsm("",        "rcall","SysDiv16",                  " +3: Mod 16");                   // REG_ACC0,1 *= REG_TMP0,1, r0 = remainder
+        GenAsm("",        "movw", OperandRegReg(REG_ACC0, 0),  "  1:");
+        break;            
+    case 4:               
+        GenAsm("",        "rcall","SysDiv32",                  " +3: Mod 32");                   // REG_ACC0,1 *= REG_TMP0,1, r0 = remainder
+        GenAsm("",        "movw", OperandRegReg(REG_ACC0, 0),  "  1:");
+        GenAsm("",        "movw", OperandRegReg(REG_ACC2, 2),  "  1:");
+    default:
+        Error(FATAL, "GenMod: size not supported (%d)\n", iLeftSize);
+    }
+}
+
+// ##########################################################################
+// #  Function: GenAnd
+// #        <todo: task brief description>
+// #
+// #        <todo: task detailed description>
+// #
+// #  Parameters:
+// #        <todo: params >
+// #
+// #  Returns:
+// #        <todo: return Value>
+// #
+// #  See Also:
+// #
+// ##########################################################################
+void GenAnd(TPExprNode pExpr) {
+
+    TPExprNode pLeft = pExpr->Use.Binary.pLeft;                                 // Left
+    TPExprNode pRight = pExpr->Use.Binary.pRight;                               // Right
+    int iLeftSize = CalcSizeOf(pLeft->pType);                                   //
+    int iRightSize = CalcSizeOf(pRight->pType);                                 //
+    ASSERT(iLeftSize == iRightSize);                                            // Confirm sizes match. This should be correct because of the initial parsing phase.
+
+    GenExpr(pLeft);                                                             // Generate Left.
+    AVR_Push(REG_ACC, iLeftSize);
+    GenExpr(pRight);                                                            // Generate Right.
+    AVR_Pop(REG_TMP, iLeftSize);
+#pragma message("    GenAnd: right var = const is a common special case.")
+
+    switch (iLeftSize) {
+    case 1: 
+        GenAsm("", "and", OperandRegReg(REG_ACC0, REG_TMP0), "  1: And 8");
+        break;
+    case 2:
+        GenAsm("", "and", OperandRegReg(REG_ACC0, REG_TMP0),  "  1: And 16");
+        GenAsm("", "and", OperandRegReg(REG_ACC1, REG_TMP1),  "  1:");
+        break;
+    case 4:
+        GenAsm("", "and", OperandRegReg(REG_ACC0, REG_TMP0),  "  1: And 32");
+        GenAsm("", "and", OperandRegReg(REG_ACC1, REG_TMP1),  "  1:");
+        GenAsm("", "and", OperandRegReg(REG_ACC2, REG_TMP2),  "  1:");
+        GenAsm("", "and", OperandRegReg(REG_ACC3, REG_TMP3),  "  1:");
+        break;
+    default:
+        Error(FATAL, "GenAnd: size not supported (%d)\n", iLeftSize);
+    }
+}
+
+// ##########################################################################
+// #  Function: GenXor
+// #        <todo: task brief description>
+// #
+// #        <todo: task detailed description>
+// #
+// #  Parameters:
+// #        <todo: params >
+// #
+// #  Returns:
+// #        <todo: return Value>
+// #
+// #  See Also:
+// #
+// ##########################################################################
+void GenXor(TPExprNode pExpr) {
+
+    TPExprNode pLeft = pExpr->Use.Binary.pLeft;                                 // Left
+    TPExprNode pRight = pExpr->Use.Binary.pRight;                               // Right
+    int iLeftSize = CalcSizeOf(pLeft->pType);                                   //
+    int iRightSize = CalcSizeOf(pRight->pType);                                 //
+    ASSERT(iLeftSize == iRightSize);                                            // Confirm sizes match. This should be correct because of the initial parsing phase.
+
+    GenExpr(pLeft);                                                             // Generate Left.
+    AVR_Push(REG_ACC, iLeftSize);
+    GenExpr(pRight);                                                            // Generate Right.
+    AVR_Pop(REG_TMP, iLeftSize);
+#pragma message("    GenXor: right var = const is a common special case.")
+
+    switch (iLeftSize) {
+    case 1:
+        GenAsm("", "eor", OperandRegReg(REG_ACC0, REG_TMP0), "  1: Xor 8");
+        break;
+    case 2:
+        GenAsm("", "eor", OperandRegReg(REG_ACC0, REG_TMP0), "  1: Xor 16");
+        GenAsm("", "eor", OperandRegReg(REG_ACC1, REG_TMP1), "  1:");
+        break;
+    case 4:
+        GenAsm("", "eor", OperandRegReg(REG_ACC0, REG_TMP0), "  1: Xor 32");
+        GenAsm("", "eor", OperandRegReg(REG_ACC1, REG_TMP1), "  1:");
+        GenAsm("", "eor", OperandRegReg(REG_ACC2, REG_TMP2), "  1:");
+        GenAsm("", "eor", OperandRegReg(REG_ACC2, REG_TMP3), "  1:");
+        break;
+    default:
+        Error(FATAL, "GenXor: size not supported (%d)\n", iLeftSize);
+    }
+}
+
+// ##########################################################################
+// #  Function: GenOr
+// #        <todo: task brief description>
+// #
+// #        <todo: task detailed description>
+// #
+// #  Parameters:
+// #        <todo: params >
+// #
+// #  Returns:
+// #        <todo: return Value>
+// #
+// #  See Also:
+// #
+// ##########################################################################
+void GenOr(TPExprNode pExpr) {
+
+    TPExprNode pLeft = pExpr->Use.Binary.pLeft;                                 // Left
+    TPExprNode pRight = pExpr->Use.Binary.pRight;                               // Right
+    int iLeftSize = CalcSizeOf(pLeft->pType);                                   //
+    int iRightSize = CalcSizeOf(pRight->pType);                                 //
+    ASSERT(iLeftSize == iRightSize);                                            // Confirm sizes match. This should be correct because of the initial parsing phase.
+
+    GenExpr(pLeft);                                                             // Generate Left.
+    AVR_Push(REG_ACC, iLeftSize);
+    GenExpr(pRight);                                                            // Generate Right.
+    AVR_Pop(REG_TMP, iLeftSize);
+#pragma message("    GenOr: right var = const is a common special case.")
+
+    switch (iLeftSize) {
+    case 1:
+        GenAsm("", "or",  OperandRegReg(REG_ACC0, REG_TMP0), "  1: Or 8");
+        break;
+    case 2:
+        GenAsm("", "or",  OperandRegReg(REG_ACC0, REG_TMP0), "  1: Or 16");
+        GenAsm("", "or",  OperandRegReg(REG_ACC1, REG_TMP1), "  1:");
+        break;
+    case 4:
+        GenAsm("", "or",  OperandRegReg(REG_ACC0, REG_TMP0), "  1: Or 32");
+        GenAsm("", "or",  OperandRegReg(REG_ACC1, REG_TMP1), "  1:");
+        GenAsm("", "or",  OperandRegReg(REG_ACC2, REG_TMP2), "  1:");
+        GenAsm("", "or",  OperandRegReg(REG_ACC3, REG_TMP3), "  1:");
+        break;
+    default:
+        Error(FATAL, "GenOr: size not supported (%d)\n", iLeftSize);
+    }
+}
+
+// ##########################################################################
+// #  Function: GenShiftR
+// #        <todo: task brief description>
+// #
+// #        <todo: task detailed description>
+// #
+// #  Parameters:
+// #        <todo: params >
+// #
+// #  Returns:
+// #        <todo: return Value>
+// #
+// #  See Also:
+// #
+// ##########################################################################
+void GenShiftR(TPExprNode pExpr) {
+
+    TPExprNode pLeft = pExpr->Use.Binary.pLeft;                                 // Left
+    TPExprNode pRight = pExpr->Use.Binary.pRight;                               // Right
+    int iLeftSize = CalcSizeOf(pLeft->pType);                                   //
+    int iRightSize = CalcSizeOf(pRight->pType);                                 //
+    ASSERT(iRightSize == 1);                                                    // Confirm sizes match. This should be correct because of the initial parsing phase.
+
+    GenExpr(pRight);                                                            // Generate Right. (deliberate reverse order)
+    AVR_Push(REG_ACC, iRightSize);
+    GenExpr(pLeft);                                                             // Generate Left.
+    AVR_Pop(REG_TMP, iRightSize);
+#pragma message("    GenShiftR: right var = const is a common special case.")
+
+    BOOL fSigned = TypeIsSigned(pLeft->pType);
+    LPSTR   szRotDone = GenLabel("_RSLdone_");
+    LPSTR   szRepeat = GenLabel("_RSLagain_");
+
+    GenAsm("",                         "Tst",  OperandReg(REG_TMP0), "  1: Shift Right");
+    GenAsm("",                         "breq", szRotDone,             "2/3:");
+
+    switch (iLeftSize) {
+    case 1:
+        if (fSigned) GenAsm(szRepeat, "asr", OperandReg(REG_ACC0),   "  1: >> 8 (signed)");
+        else         GenAsm(szRepeat, "lsr", OperandReg(REG_ACC0),   "  1: >> 8 (unsigned)");
+        break;                                                 
+    case 2:                                                    
+        if (fSigned) GenAsm(szRepeat, "asr", OperandReg(REG_ACC1),   "  1: >> 16 (signed)");
+        else         GenAsm(szRepeat, "lsr", OperandReg(REG_ACC1),   "  1: >> 16 (unsigned)");
+        GenAsm("",                    "ror", OperandReg(REG_ACC0),   "  1:");
+        break;                                                 
+    case 4:                                                    
+        if (fSigned) GenAsm(szRepeat, "asr", OperandReg(REG_ACC3),   "  1: >> 32 (signed)");
+        else         GenAsm(szRepeat, "lsr", OperandReg(REG_ACC3),   "  1: >> 32 (unsigned)");
+        GenAsm("",                    "ror", OperandReg(REG_ACC2),   "  1:");
+        GenAsm("",                    "ror", OperandReg(REG_ACC1),   "  1:");
+        GenAsm("",                    "ror", OperandReg(REG_ACC0),   "  1:");
+        break;
+    default:
+        Error(FATAL, "GenShiftR: size not supported (%d)\n", iLeftSize);
+    }
+    GenAsm("",                        "dec", OperandReg(REG_TMP0), "  1:");
+    GenAsm("",                        "brne", szRepeat,            "2/3:");
+    GenAsm(szRotDone,                 "",     "",                  "---: Shift Right done.");
+}
+
+// ##########################################################################
+// #  Function: GenShiftL
+// #        <todo: task brief description>
+// #
+// #        <todo: task detailed description>
+// #
+// #  Parameters:
+// #        <todo: params >
+// #
+// #  Returns:
+// #        <todo: return Value>
+// #
+// #  See Also:
+// #
+// ##########################################################################
+void GenShiftL(TPExprNode pExpr) {
+
+    TPExprNode pLeft = pExpr->Use.Binary.pLeft;                                 // Left
+    TPExprNode pRight = pExpr->Use.Binary.pRight;                               // Right
+    int iLeftSize = CalcSizeOf(pLeft->pType);                                   //
+    int iRightSize = CalcSizeOf(pRight->pType);                                 //
+    ASSERT(iRightSize == 1);                                                    // Confirm sizes match. This should be correct because of the initial parsing phase.
+
+    GenExpr(pRight);                                                            // Generate Right. (deliberate reverse order)
+    AVR_Push(REG_ACC, iRightSize);
+    GenExpr(pLeft);                                                             // Generate Left.
+    AVR_Pop(REG_TMP, iRightSize);
+#pragma message("    GenShiftL: right var = const is a common special case.")
+
+    LPSTR   szRotDone = GenLabel("_LSLdone_");
+    LPSTR   szRepeat = GenLabel("_LSLagain_");
+
+    GenAsm("",           "Tst",  OperandReg(REG_TMP0), "  1: Shift Left");
+    GenAsm("",           "breq", szRotDone,            "2/3:");
+
+    switch (iLeftSize) {
+    case 1:
+        GenAsm(szRepeat, "lsl", OperandReg(REG_ACC0), "  1: << 8");
+        break;
+    case 2:
+        GenAsm(szRepeat, "lsl", OperandReg(REG_ACC0), "  1: << 16");
+        GenAsm("",       "rol", OperandReg(REG_ACC1), "  1:");
+        break;
+    case 4:
+        GenAsm(szRepeat, "lsl", OperandReg(REG_ACC0), "  1: << 32");
+        GenAsm("",       "rol", OperandReg(REG_ACC1), "  1:");
+        GenAsm("",       "rol", OperandReg(REG_ACC2), "  1:");
+        GenAsm("",       "rol", OperandReg(REG_ACC3), "  1:");
+        break;
+    default:
+        Error(FATAL, "GenShiftL: size not supported (%d)\n", iLeftSize);
+    }
+    GenAsm("",           "dec", OperandReg(REG_TMP0), "  1:");
+    GenAsm("",           "brne", szRepeat,            "2/3:");
+    GenAsm(szRotDone,    "",     "",                  "---: Shift left done.");
+}
+
+// ##########################################################################
+// #  Function: GenCompEQ
+// #        <todo: task brief description>
+// #
+// #        <todo: task detailed description>
+// #
+// #  Parameters:
+// #        <todo: params >
+// #
+// #  Returns:
+// #        <todo: return Value>
+// #
+// #  See Also:
+// #
+// ##########################################################################
+void  GenCompEQ(TPExprNode pExpr) {
+
+    TPExprNode pLeft = pExpr->Use.Binary.pLeft;                                 // Left
+    TPExprNode pRight = pExpr->Use.Binary.pRight;                               // Right
+    int iLeftSize = CalcSizeOf(pLeft->pType);                                   //
+    int iRightSize = CalcSizeOf(pRight->pType);                                 //
+    ASSERT(iLeftSize == iRightSize);                                            // Confirm sizes match. This should be correct because of the initial parsing phase.
+
+    GenExpr(pLeft);                                                             // Generate Left.
+    AVR_Push(REG_ACC, iLeftSize);
+    GenExpr(pRight);                                                            // Generate Right.
+    AVR_Pop(REG_TMP, iLeftSize);
+
+    LPSTR   szEqOut = GenLabel("_EqDone_");
+
+    switch (iLeftSize) {
+    case 1:
+        GenAsm("", "sub", OperandRegReg(REG_ACC0, REG_TMP0),  "  1: Compare EQ 8");
+        break;
+    case 2: 
+        GenAsm("", "sub", OperandRegReg(REG_ACC0, REG_TMP0), "  1: Compare EQ 16");
+        GenAsm("", "sbc", OperandRegReg(REG_ACC1, REG_TMP1), "  1:");
+        break;
+    case 4:
+        GenAsm("", "sub", OperandRegReg(REG_ACC0, REG_TMP0), "  1: Compare EQ 32");
+        GenAsm("", "sbc", OperandRegReg(REG_ACC1, REG_TMP1), "  1:");
+        GenAsm("", "sbc", OperandRegReg(REG_ACC2, REG_TMP2), "  1:");
+        GenAsm("", "sbc", OperandRegReg(REG_ACC3, REG_TMP3), "  1:");
+        break;
+    default:
+        Error(FATAL, "GenCompEQ: size not supported (%d)\n", iLeftSize);
+    }
+    GenAsm("",     "breq", szEqOut,                "  1:");
+    GenAsm("",     "ser",  OperandReg(REG_ACC0),   "  1:");
+    GenAsm(szEqOut,"inc",  OperandReg(REG_ACC0),   "  1:");
+}
+
+// ##########################################################################
+// #  Function: GenCompEQConditional
+// #        <todo: task brief description>
+// #
+// #        <todo: task detailed description>
+// #
+// #  Parameters:
+// #        <todo: params >
+// #
+// #  Returns:
+// #        <todo: return Value>
+// #
+// #  See Also:
+// #
+// ##########################################################################
+void  GenCompEQConditional(TPExprNode pExpr, LPSTR pszTrue, LPSTR pszFalse) {
+
+    TPExprNode pLeft = pExpr->Use.Binary.pLeft;                                 // Left
+    TPExprNode pRight = pExpr->Use.Binary.pRight;                               // Right
+    int iLeftSize = CalcSizeOf(pLeft->pType);                                   //
+    int iRightSize = CalcSizeOf(pRight->pType);                                 //
+    ASSERT(iLeftSize == iRightSize);                                            // Confirm sizes match. This should be correct because of the initial parsing phase.
+
+    GenExpr(pLeft);                                                             // Generate Left.
+    AVR_Push(REG_ACC, iLeftSize);
+    GenExpr(pRight);                                                            // Generate Right.
+    AVR_Pop(REG_TMP, iLeftSize);
+
+    LPSTR   szEqOut = GenLabel("_EqDone_");
+
+    switch (iLeftSize) {
+    case 1:
+        GenAsm("", "sub", OperandRegReg(REG_ACC0, REG_TMP0),  "  1: Compare EQ 8");
+        break;
+    case 2: 
+        GenAsm("", "sub", OperandRegReg(REG_ACC0, REG_TMP0), "  1: Compare EQ 16");
+        GenAsm("", "sbc", OperandRegReg(REG_ACC1, REG_TMP1), "  1:");
+        break;
+    case 4:
+        GenAsm("", "sub", OperandRegReg(REG_ACC0, REG_TMP0), "  1: Compare EQ 32");
+        GenAsm("", "sbc", OperandRegReg(REG_ACC1, REG_TMP1), "  1:");
+        GenAsm("", "sbc", OperandRegReg(REG_ACC2, REG_TMP2), "  1:");
+        GenAsm("", "sbc", OperandRegReg(REG_ACC3, REG_TMP3), "  1:");
+        break;
+    default:
+        Error(FATAL, "GenCompEQConditional: size not supported (%d)\n", iLeftSize);
+    }
+
+    if (pszTrue != NULL)  { GenAsm("", "breq", pszTrue,  "1/2:  branch if EQ TRUE"); }
+    if (pszFalse != NULL) { GenAsm("", "brne", pszFalse, "1/2:  branch if EQ FALSE"); }
+    if (pszTrue == NULL)  { GenAsm("", "",     "",       "   :  fall through on EQ TRUE"); }
+    if (pszFalse == NULL) { GenAsm("", "",     "",       "   :  fall through on EQ FALSE"); }
+}
+
+
+// ##########################################################################
+// #  Function: GenCompNE
+// #        <todo: task brief description>
+// #
+// #        <todo: task detailed description>
+// #
+// #  Parameters:
+// #        <todo: params >
+// #
+// #  Returns:
+// #        <todo: return Value>
+// #
+// #  See Also:
+// #
+// ##########################################################################
+void GenCompNE(TPExprNode pExpr) {
+
+    TPExprNode pLeft = pExpr->Use.Binary.pLeft;                                 // Left
+    TPExprNode pRight = pExpr->Use.Binary.pRight;                               // Right
+    int iLeftSize = CalcSizeOf(pLeft->pType);                                   //
+    int iRightSize = CalcSizeOf(pRight->pType);                                 //
+    ASSERT(iLeftSize == iRightSize);                                            // Confirm sizes match. This should be correct because of the initial parsing phase.
+
+    GenExpr(pLeft);                                                             // Generate Left.
+    AVR_Push(REG_ACC, iLeftSize);
+    GenExpr(pRight);                                                            // Generate Right.
+    AVR_Pop(REG_TMP, iLeftSize);
+
+    LPSTR   szNeOut = GenLabel("_NeDone_");
+
+    switch (iLeftSize) {
+    case 1:
+        GenAsm("", "sub", OperandRegReg(REG_ACC0, REG_TMP0),  "  1: Compare NE 8");
+        break;
+    case 2: 
+        GenAsm("", "sub", OperandRegReg(REG_ACC0, REG_TMP0), "  1: Compare NE 16");
+        GenAsm("", "sbc", OperandRegReg(REG_ACC1, REG_TMP1), "  1:");
+        break;
+    case 4:
+        GenAsm("", "sub", OperandRegReg(REG_ACC0, REG_TMP0), "  1: Compare NE 32");
+        GenAsm("", "sbc", OperandRegReg(REG_ACC1, REG_TMP1), "  1:");
+        GenAsm("", "sbc", OperandRegReg(REG_ACC2, REG_TMP2), "  1:");
+        GenAsm("", "sbc", OperandRegReg(REG_ACC3, REG_TMP3), "  1:");
+        break;
+    default:
+        Error(FATAL, "GenCompNe: size not supported (%d)\n", iLeftSize);
+    }
+    GenAsm("",      "breq", szNeOut,                "  1:");
+    GenAsm("",      "clr",  OperandReg(REG_ACC0),   "  1:");
+    GenAsm("",      "inc",  OperandReg(REG_ACC0),   "  1:");
+    GenAsm(szNeOut, "",     "",                     "   :");
+}
+
+// ##########################################################################
+// #  Function: GenCompNEConditional
+// #        <todo: task brief description>
+// #
+// #        <todo: task detailed description>
+// #
+// #  Parameters:
+// #        <todo: params >
+// #
+// #  Returns:
+// #        <todo: return Value>
+// #
+// #  See Also:
+// #
+// ##########################################################################
+void GenCompNEConditional(TPExprNode pExpr, LPSTR pszTrue, LPSTR pszFalse) {
+
+    TPExprNode pLeft = pExpr->Use.Binary.pLeft;                                 // Left
+    TPExprNode pRight = pExpr->Use.Binary.pRight;                               // Right
+    int iLeftSize = CalcSizeOf(pLeft->pType);                                   //
+    int iRightSize = CalcSizeOf(pRight->pType);                                 //
+    ASSERT(iLeftSize == iRightSize);                                            // Confirm sizes match. This should be correct because of the initial parsing phase.
+
+    GenExpr(pLeft);                                                             // Generate Left.
+    AVR_Push(REG_ACC, iLeftSize);
+    GenExpr(pRight);                                                            // Generate Right.
+    AVR_Pop(REG_TMP, iLeftSize);
+
+    LPSTR   szNeOut = GenLabel("_NeDone_");
+
+    switch (iLeftSize) {
+    case 1:
+        GenAsm("", "sub", OperandRegReg(REG_ACC0, REG_TMP0),  "  1: Compare NE 8");
+        break;
+    case 2: 
+        GenAsm("", "sub", OperandRegReg(REG_ACC0, REG_TMP0), "  1: Compare NE 16");
+        GenAsm("", "sbc", OperandRegReg(REG_ACC1, REG_TMP1), "  1:");
+        break;
+    case 4:
+        GenAsm("", "sub", OperandRegReg(REG_ACC0, REG_TMP0), "  1: Compare NE 32");
+        GenAsm("", "sbc", OperandRegReg(REG_ACC1, REG_TMP1), "  1:");
+        GenAsm("", "sbc", OperandRegReg(REG_ACC2, REG_TMP2), "  1:");
+        GenAsm("", "sbc", OperandRegReg(REG_ACC3, REG_TMP3), "  1:");
+        break;
+    default:
+        Error(FATAL, "GenCompNEConditional: size not supported (%d)\n", iLeftSize);
+    }
+
+    if (pszTrue != NULL)  { GenAsm("", "brne", pszTrue,  "1/2:  branch if NE TRUE"); }
+    if (pszFalse != NULL) { GenAsm("", "breq", pszFalse, "1/2:  branch if NE FALSE"); }
+    if (pszTrue == NULL)  { GenAsm("", "",     "",       "   :  fall through on NE TRUE"); }
+    if (pszFalse == NULL) { GenAsm("", "",     "",       "   :  fall through on NE FALSE"); }
+}
+
+
+// ##########################################################################
+// #  Function: GenCompLT
+// #        <todo: task brief description>
+// #
+// #        <todo: task detailed description>
+// #
+// #  Parameters:
+// #        <todo: params >
+// #
+// #  Returns:
+// #        <todo: return Value>
+// #
+// #  See Also:
+// #
+// ##########################################################################
+void GenCompLT(TPExprNode pExpr) {
+
+    TPExprNode pLeft = pExpr->Use.Binary.pLeft;                                 // Left
+    TPExprNode pRight = pExpr->Use.Binary.pRight;                               // Right
+    int iLeftSize = CalcSizeOf(pLeft->pType);                                   //
+    int iRightSize = CalcSizeOf(pRight->pType);                                 //
+    ASSERT(iLeftSize == iRightSize);                                            // Confirm sizes match. This should be correct because of the initial parsing phase.
+
+    GenExpr(pLeft);                                                             // Generate Left.
+    AVR_Push(REG_ACC, iLeftSize);
+    GenExpr(pRight);                                                            // Generate Right.
+    AVR_Pop(REG_TMP, iLeftSize);
+
+    BOOL fSigned = TypeIsSigned(pLeft->pType);
+    LPSTR   szTrue  = GenLabel("_LtTrue_");
+    LPSTR   szOut   = GenLabel("_LtOut_");
+    switch (iLeftSize) {
+    case 1:
+        GenAsm("", "sub", OperandRegReg(REG_TMP0, REG_ACC0),  "  1: Compare LT 8");
+        break;                                   
+    case 2:                                      
+        GenAsm("", "sub", OperandRegReg(REG_TMP0, REG_ACC0), "  1: Compare LT 16");
+        GenAsm("", "sbc", OperandRegReg(REG_TMP1, REG_ACC1), "  1:");
+        break;                                   
+    case 4:                                      
+        GenAsm("", "sub", OperandRegReg(REG_TMP0, REG_ACC0), "  1: Compare LT 32");
+        GenAsm("", "sbc", OperandRegReg(REG_TMP1, REG_ACC1), "  1:");
+        GenAsm("", "sbc", OperandRegReg(REG_TMP2, REG_ACC2), "  1:");
+        GenAsm("", "sbc", OperandRegReg(REG_TMP3, REG_ACC3), "  1:");
+        break;
+    default:
+        Error(FATAL, "GenCompLT: size not supported (%d)\n", iLeftSize);
+    }
+    if (fSigned) {
+        GenAsm("", "brlt", szTrue, "1/2:  signed");
+    }
+    else {
+        GenAsm("", "brlo", szTrue, "1/2:  unsigned");
+    }
+    GenAsm("",     "clr",  OperandReg(REG_ACC0), "  1:");
+    GenAsm("",     "rjmp", szOut,                "  1:");
+    GenAsm(szTrue, "clr",  OperandReg(REG_ACC0), "  1:");
+    GenAsm("",     "inc",  OperandReg(REG_ACC0), "  1:");
+    GenAsm(szOut,  "",     "",                   "   :");
+}
+
+
+// ##########################################################################
+// #  Function: GenCompLTConditional
+// #        <todo: task brief description>
+// #
+// #        <todo: task detailed description>
+// #
+// #  Parameters:
+// #        <todo: params >
+// #
+// #  Returns:
+// #        <todo: return Value>
+// #
+// #  See Also:
+// #
+// ##########################################################################
+void GenCompLTConditional(TPExprNode pExpr, LPSTR pszTrue, LPSTR pszFalse) {
+
+    TPExprNode pLeft = pExpr->Use.Binary.pLeft;                                 // Left
+    TPExprNode pRight = pExpr->Use.Binary.pRight;                               // Right
+    int iLeftSize = CalcSizeOf(pLeft->pType);                                   //
+    int iRightSize = CalcSizeOf(pRight->pType);                                 //
+    ASSERT(iLeftSize == iRightSize);                                            // Confirm sizes match. This should be correct because of the initial parsing phase.
+
+    GenExpr(pLeft);                                                             // Generate Left.
+    AVR_Push(REG_ACC, iLeftSize);
+    GenExpr(pRight);                                                            // Generate Right.
+    AVR_Pop(REG_TMP, iLeftSize);
+
+    BOOL fSigned = TypeIsSigned(pLeft->pType);
+
+    switch (iLeftSize) {
+    case 1:
+        GenAsm("", "sub", OperandRegReg(REG_TMP0, REG_ACC0), "  1: Compare LT 8");
+        break;
+    case 2:
+        GenAsm("", "sub", OperandRegReg(REG_TMP0, REG_ACC0), "  1: Compare LT 16");
+        GenAsm("", "sbc", OperandRegReg(REG_TMP1, REG_ACC1), "  1:");
+        break;
+    case 4:
+        GenAsm("", "sub", OperandRegReg(REG_TMP0, REG_ACC0), "  1: Compare LT 32");
+        GenAsm("", "sbc", OperandRegReg(REG_TMP1, REG_ACC1), "  1:");
+        GenAsm("", "sbc", OperandRegReg(REG_TMP2, REG_ACC2), "  1:");
+        GenAsm("", "sbc", OperandRegReg(REG_TMP3, REG_ACC3), "  1:");
+        break;
+    default:
+        Error(FATAL, "GenCompLTConditional: size not supported (%d)\n", iLeftSize);
+    }
+
+    if (pszTrue != NULL) {
+        if (fSigned) { GenAsm("", "brlt", pszTrue, "1/2:  branch if (signed) LT TRUE"); }
+        else         { GenAsm("", "brlo", pszTrue, "1/2:  branch if (unsigned) LT TRUE"); }
+    }
+    if (pszFalse != NULL) {
+        if (fSigned) { GenAsm("", "brge", pszFalse, "1/2:  branch if (signed) LT FALSE"); }
+        else         { GenAsm("", "brsh", pszFalse, "1/2:  branch if (unsigned) LT FALSE"); }
+    }
+    if (pszTrue == NULL) {
+        if (fSigned) { GenAsm("", "", "", "   :  fall through on (signed) LT TRUE"); }
+        else         { GenAsm("", "", "", "   :  fall through on (unsigned) LT TRUE"); }
+    }
+    if (pszFalse == NULL) {
+        if (fSigned) { GenAsm("", "", "", "   :  fall through on (signed) LT FALSE"); }
+        else         { GenAsm("", "", "", "   :  fall through on (unsigned) LT FALSE"); }
+    }
+
+}
+
+
+// ##########################################################################
+// #  Function: GenCompLE
+// #        <todo: task brief description>
+// #
+// #        <todo: task detailed description>
+// #
+// #  Parameters:
+// #        <todo: params >
+// #
+// #  Returns:
+// #        <todo: return Value>
+// #
+// #  See Also:
+// #
+// ##########################################################################
+void GenCompLE(TPExprNode pExpr) {
+
+    TPExprNode pLeft = pExpr->Use.Binary.pLeft;                                 // Left
+    TPExprNode pRight = pExpr->Use.Binary.pRight;                               // Right
+    int iLeftSize = CalcSizeOf(pLeft->pType);                                   //
+    int iRightSize = CalcSizeOf(pRight->pType);                                 //
+    ASSERT(iLeftSize == iRightSize);                                            // Confirm sizes match. This should be correct because of the initial parsing phase.
+
+    GenExpr(pLeft);                                                             // Generate Left.
+    AVR_Push(REG_ACC, iLeftSize);
+    GenExpr(pRight);                                                            // Generate Right.
+    AVR_Pop(REG_TMP, iLeftSize);
+
+    BOOL fSigned = TypeIsSigned(pLeft->pType);
+    LPSTR   szTrue = GenLabel("_LeTrue_");
+    LPSTR   szOut = GenLabel("_LeOut_");
+    switch (iLeftSize) {
+    case 1:
+        GenAsm("", "sub", OperandRegReg(REG_ACC0, REG_TMP0),  "  1: Compare LE 8");
+        break;
+    case 2: 
+        GenAsm("", "sub", OperandRegReg(REG_ACC0, REG_TMP0), "  1: Compare LE 16");
+        GenAsm("", "sbc", OperandRegReg(REG_ACC1, REG_TMP1), "  1:");
+        break;
+    case 4:
+        GenAsm("", "sub", OperandRegReg(REG_ACC0, REG_TMP0), "  1: Compare LE 32");
+        GenAsm("", "sbc", OperandRegReg(REG_ACC1, REG_TMP1), "  1:");
+        GenAsm("", "sbc", OperandRegReg(REG_ACC2, REG_TMP2), "  1:");
+        GenAsm("", "sbc", OperandRegReg(REG_ACC3, REG_TMP3), "  1:");
+        break;
+    default:
+        Error(FATAL, "GenCompLE: size not supported (%d)\n", iLeftSize);
+    }
+    
+    if (fSigned) {
+        GenAsm("", "brge", szTrue, "1/2:  signed");
+    }
+    else {
+        GenAsm("", "brsh", szTrue, "1/2:  unsigned");
+    }
+    GenAsm("",     "clr",  OperandReg(REG_ACC0), "  1:");
+    GenAsm("",     "rjmp", szOut,                "  2:");
+    GenAsm(szTrue, "clr",  OperandReg(REG_ACC0), "  1:");
+    GenAsm("",     "inc",  OperandReg(REG_ACC0), "  1:");
+    GenAsm(szOut,  "",     "",                   "   :");
+}
+
+// ##########################################################################
+// #  Function: GenCompLEConditional
+// #        <todo: task brief description>
+// #
+// #        <todo: task detailed description>
+// #
+// #  Parameters:
+// #        <todo: params >
+// #
+// #  Returns:
+// #        <todo: return Value>
+// #
+// #  See Also:
+// #
+// ##########################################################################
+void GenCompLEConditional(TPExprNode pExpr, LPSTR pszTrue, LPSTR pszFalse) {
+
+    TPExprNode pLeft = pExpr->Use.Binary.pLeft;                                 // Left
+    TPExprNode pRight = pExpr->Use.Binary.pRight;                               // Right
+    int iLeftSize = CalcSizeOf(pLeft->pType);                                   //
+    int iRightSize = CalcSizeOf(pRight->pType);                                 //
+    ASSERT(iLeftSize == iRightSize);                                            // Confirm sizes match. This should be correct because of the initial parsing phase.
+
+    GenExpr(pLeft);                                                             // Generate Left.
+    AVR_Push(REG_ACC, iLeftSize);
+    GenExpr(pRight);                                                            // Generate Right.
+    AVR_Pop(REG_TMP, iLeftSize);
+
+    BOOL fSigned = TypeIsSigned(pLeft->pType);
+    LPSTR   szTrue = GenLabel("_LeTrue_");
+    LPSTR   szOut = GenLabel("_LeOut_");
+    switch (iLeftSize) {
+    case 1:
+        GenAsm("", "sub", OperandRegReg(REG_ACC0, REG_TMP0),  "  1: Compare LE 8");
+        break;
+    case 2: 
+        GenAsm("", "sub", OperandRegReg(REG_ACC0, REG_TMP0), "  1: Compare LE 16");
+        GenAsm("", "sbc", OperandRegReg(REG_ACC1, REG_TMP1), "  1:");
+        break;
+    case 4:
+        GenAsm("", "sub", OperandRegReg(REG_ACC0, REG_TMP0), "  1: Compare LE 32");
+        GenAsm("", "sbc", OperandRegReg(REG_ACC1, REG_TMP1), "  1:");
+        GenAsm("", "sbc", OperandRegReg(REG_ACC2, REG_TMP2), "  1:");
+        GenAsm("", "sbc", OperandRegReg(REG_ACC3, REG_TMP3), "  1:");
+        break;
+    default:
+        Error(FATAL, "GenCompLEConditional: size not supported (%d)\n", iLeftSize);
+    }
+    
+    if (pszTrue != NULL) {
+        if (fSigned) { GenAsm("", "brge", pszTrue, "1/2:  branch if (signed) LE TRUE"); }
+        else         { GenAsm("", "brsh", pszTrue, "1/2:  branch if (unsigned) LE TRUE"); }
+    }
+    if (pszFalse != NULL) {
+        if (fSigned) { GenAsm("", "brlt", pszFalse, "1/2:  branch if (signed) LE FALSE"); }
+        else         { GenAsm("", "brlo", pszFalse, "1/2:  branch if (unsigned) LE FALSE"); }
+    }
+    if (pszTrue == NULL) {
+        if (fSigned) { GenAsm("", "", "", "   :  fall through on (signed) LE TRUE"); }
+        else         { GenAsm("", "", "", "   :  fall through on (unsigned) LE TRUE"); }
+    }
+    if (pszFalse == NULL) {
+        if (fSigned) { GenAsm("", "", "", "   :  fall through on (signed) LE FALSE"); }
+        else         { GenAsm("", "", "", "   :  fall through on (unsigned) LE FALSE"); }
+    }
+}
+
+// ##########################################################################
+// #  Function: GenCompGT
+// #        <todo: task brief description>
+// #
+// #        <todo: task detailed description>
+// #
+// #  Parameters:
+// #        <todo: params >
+// #
+// #  Returns:
+// #        <todo: return Value>
+// #
+// #  See Also:
+// #
+// ##########################################################################
+void GenCompGT(TPExprNode pExpr) {
+
+    TPExprNode pLeft = pExpr->Use.Binary.pLeft;                                 // Left
+    TPExprNode pRight = pExpr->Use.Binary.pRight;                               // Right
+    int iLeftSize = CalcSizeOf(pLeft->pType);                                   //
+    int iRightSize = CalcSizeOf(pRight->pType);                                 //
+    ASSERT(iLeftSize == iRightSize);                                            // Confirm sizes match. This should be correct because of the initial parsing phase.
+
+    GenExpr(pLeft);                                                             // Generate Left.
+    AVR_Push(REG_ACC, iLeftSize);
+    GenExpr(pRight);                                                            // Generate Right.
+    AVR_Pop(REG_TMP, iLeftSize);
+
+    BOOL fSigned = TypeIsSigned(pLeft->pType);
+    LPSTR   szTrue = GenLabel("_GtTrue_");
+    LPSTR   szOut = GenLabel("_GtOut_");
+    switch (iLeftSize) {
+    case 1:
+        GenAsm("", "sub", OperandRegReg(REG_ACC0, REG_TMP0), "  1: Compare GT 8");
+        break;
+    case 2:
+        GenAsm("", "sub", OperandRegReg(REG_ACC0, REG_TMP0), "  1: Compare GT 16");
+        GenAsm("", "sbc", OperandRegReg(REG_ACC1, REG_TMP1), "  1:");
+        break;
+    case 4:
+        GenAsm("", "sub", OperandRegReg(REG_ACC0, REG_TMP0), "  1: Compare GT 32");
+        GenAsm("", "sbc", OperandRegReg(REG_ACC1, REG_TMP1), "  1:");
+        GenAsm("", "sbc", OperandRegReg(REG_ACC2, REG_TMP2), "  1:");
+        GenAsm("", "sbc", OperandRegReg(REG_ACC3, REG_TMP3), "  1:");
+        break;
+    default:
+        Error(FATAL, "GenCompGT: size not supported (%d)\n", iLeftSize);
+    }
+    
+    if (fSigned) {
+        GenAsm("", "brlt", szTrue, "1/2:  signed");
+    }
+    else {
+        GenAsm("", "brlo", szTrue, "1/2:  unsigned");
+    }
+    GenAsm("",     "clr",  OperandReg(REG_ACC0),   "  1:");
+    GenAsm("",     "rjmp", szOut,                  "  2:");
+    GenAsm(szTrue, "clr",  OperandReg(REG_ACC0),   "  1:");
+    GenAsm("",     "inc",  OperandReg(REG_ACC0),   "  1:");
+    GenAsm(szOut,  "",     "",                     "   :");
+}
+
+// ##########################################################################
+// #  Function: GenCompGTConditional
+// #        <todo: task brief description>
+// #
+// #        <todo: task detailed description>
+// #
+// #  Parameters:
+// #        <todo: params >
+// #
+// #  Returns:
+// #        <todo: return Value>
+// #
+// #  See Also:
+// #
+// ##########################################################################
+void GenCompGTConditional(TPExprNode pExpr, LPSTR pszTrue, LPSTR pszFalse) {
+
+    TPExprNode pLeft = pExpr->Use.Binary.pLeft;                                 // Left
+    TPExprNode pRight = pExpr->Use.Binary.pRight;                               // Right
+    int iLeftSize = CalcSizeOf(pLeft->pType);                                   //
+    int iRightSize = CalcSizeOf(pRight->pType);                                 //
+    ASSERT(iLeftSize == iRightSize);                                            // Confirm sizes match. This should be correct because of the initial parsing phase.
+
+    GenExpr(pLeft);                                                             // Generate Left.
+    AVR_Push(REG_ACC, iLeftSize);
+    GenExpr(pRight);                                                            // Generate Right.
+    AVR_Pop(REG_TMP, iLeftSize);
+
+    BOOL fSigned = TypeIsSigned(pLeft->pType);
+    LPSTR   szTrue = GenLabel("_GtTrue_");
+    LPSTR   szOut = GenLabel("_GtOut_");
+    switch (iLeftSize) {
+    case 1:
+        GenAsm("", "sub", OperandRegReg(REG_ACC0, REG_TMP0), "  1: Compare GT 8");
+        break;
+    case 2:
+        GenAsm("", "sub", OperandRegReg(REG_ACC0, REG_TMP0), "  1: Compare GT 16");
+        GenAsm("", "sbc", OperandRegReg(REG_ACC1, REG_TMP1), "  1:");
+        break;
+    case 4:
+        GenAsm("", "sub", OperandRegReg(REG_ACC0, REG_TMP0), "  1: Compare GT 32");
+        GenAsm("", "sbc", OperandRegReg(REG_ACC1, REG_TMP1), "  1:");
+        GenAsm("", "sbc", OperandRegReg(REG_ACC2, REG_TMP2), "  1:");
+        GenAsm("", "sbc", OperandRegReg(REG_ACC3, REG_TMP3), "  1:");
+        break;
+    default:
+        Error(FATAL, "GenCompGTConditional: size not supported (%d)\n", iLeftSize);
+    }
+    
+    if (pszTrue != NULL) {
+        if (fSigned) { GenAsm("", "brlt", pszTrue, "1/2:  branch if (signed) GT TRUE"); }
+        else         { GenAsm("", "brlo", pszTrue, "1/2:  branch if (unsigned) GT TRUE"); }
+    }
+    if (pszFalse != NULL) {
+        if (fSigned) { GenAsm("", "brge", pszFalse, "1/2:  branch if (signed) GT FALSE"); }
+        else         { GenAsm("", "brsh", pszFalse, "1/2:  branch if (unsigned) GT FALSE"); }
+    }
+    if (pszTrue == NULL) {
+        if (fSigned) { GenAsm("", "", "", "   :  fall through on (signed) GT TRUE"); }
+        else         { GenAsm("", "", "", "   :  fall through on (unsigned) GT TRUE"); }
+    }
+    if (pszFalse == NULL) {
+        if (fSigned) { GenAsm("", "", "", "   :  fall through on (signed) GT FALSE"); }
+        else         { GenAsm("", "", "", "   :  fall through on (unsigned) GT FALSE"); }
+    }
+}
+
+// ##########################################################################
+// #  Function: GenCompGE
+// #        <todo: task brief description>
+// #
+// #        <todo: task detailed description>
+// #
+// #  Parameters:
+// #        <todo: params >
+// #
+// #  Returns:
+// #        <todo: return Value>
+// #
+// #  See Also:
+// #
+// ##########################################################################
+void GenCompGE(TPExprNode pExpr) {
+
+    TPExprNode pLeft = pExpr->Use.Binary.pLeft;                                 // Left
+    TPExprNode pRight = pExpr->Use.Binary.pRight;                               // Right
+    int iLeftSize = CalcSizeOf(pLeft->pType);                                   //
+    int iRightSize = CalcSizeOf(pRight->pType);                                 //
+    ASSERT(iLeftSize == iRightSize);                                            // Confirm sizes match. This should be correct because of the initial parsing phase.
+
+    GenExpr(pLeft);                                                             // Generate Left.
+    AVR_Push(REG_ACC, iLeftSize);
+    GenExpr(pRight);                                                            // Generate Right.
+    AVR_Pop(REG_TMP, iLeftSize);
+
+    BOOL    fSigned = TypeIsSigned(pLeft->pType);
+    LPSTR   szTrue = GenLabel("_GeTrue_");
+    LPSTR   szOut = GenLabel("_GeOut_");
+    switch (iLeftSize) {
+    case 1:
+        GenAsm("", "sub", OperandRegReg(REG_TMP0, REG_ACC0), "  1: Compare GE 8");
+        break;
+    case 2:
+        GenAsm("", "sub", OperandRegReg(REG_TMP0, REG_ACC0), "  1: Compare GE 16");
+        GenAsm("", "sbc", OperandRegReg(REG_TMP1, REG_ACC1), "  1:");
+        break;
+    case 4:
+        GenAsm("", "sub", OperandRegReg(REG_TMP0, REG_ACC0), "  1: Compare GE 32");
+        GenAsm("", "sbc", OperandRegReg(REG_TMP1, REG_ACC1), "  1:");
+        GenAsm("", "sbc", OperandRegReg(REG_TMP2, REG_ACC2), "  1:");
+        GenAsm("", "sbc", OperandRegReg(REG_TMP3, REG_ACC3), "  1:");
+        break;
+    default:
+        Error(FATAL, "GenCompGE: size not supported (%d)\n", iLeftSize);
+    }
+
+    if (fSigned) {
+        GenAsm("", "brge", szTrue, "1/2:  signed");
+    }
+    else {
+        GenAsm("", "brsh", szTrue, "1/2:  unsigned");
+    }
+    GenAsm("",     "clr",  OperandReg(REG_ACC0), "  1:");
+    GenAsm("",     "rjmp", szOut,                "  2:");
+    GenAsm(szTrue, "clr",  OperandReg(REG_ACC0), "  1:");
+    GenAsm("",     "inc",  OperandReg(REG_ACC0), "  1:");
+    GenAsm(szOut,  "",     "",                   "   :");
+}
+
+// ##########################################################################
+// #  Function: GenCompGEConditional
+// #        <todo: task brief description>
+// #
+// #        <todo: task detailed description>
+// #
+// #  Parameters:
+// #        <todo: params >
+// #
+// #  Returns:
+// #        <todo: return Value>
+// #
+// #  See Also:
+// #
+// ##########################################################################
+void GenCompGEConditional(TPExprNode pExpr, LPSTR pszTrue, LPSTR pszFalse) {
+
+    TPExprNode pLeft = pExpr->Use.Binary.pLeft;                                 // Left
+    TPExprNode pRight = pExpr->Use.Binary.pRight;                               // Right
+    int iLeftSize = CalcSizeOf(pLeft->pType);                                   //
+    int iRightSize = CalcSizeOf(pRight->pType);                                 //
+    ASSERT(iLeftSize == iRightSize);                                            // Confirm sizes match. This should be correct because of the initial parsing phase.
+
+    GenExpr(pLeft);                                                             // Generate Left.
+    AVR_Push(REG_ACC, iLeftSize);
+    GenExpr(pRight);                                                            // Generate Right.
+    AVR_Pop(REG_TMP, iLeftSize);
+
+    BOOL    fSigned = TypeIsSigned(pLeft->pType);
+    LPSTR   szTrue = GenLabel("_GeTrue_");
+    LPSTR   szOut = GenLabel("_GeOut_");
+    switch (iLeftSize) {
+    case 1:
+        GenAsm("", "sub", OperandRegReg(REG_TMP0, REG_ACC0), "  1: Compare GE 8");
+        break;
+    case 2:
+        GenAsm("", "sub", OperandRegReg(REG_TMP0, REG_ACC0), "  1: Compare GE 16");
+        GenAsm("", "sbc", OperandRegReg(REG_TMP1, REG_ACC1), "  1:");
+        break;
+    case 4:
+        GenAsm("", "sub", OperandRegReg(REG_TMP0, REG_ACC0), "  1: Compare GE 32");
+        GenAsm("", "sbc", OperandRegReg(REG_TMP1, REG_ACC1), "  1:");
+        GenAsm("", "sbc", OperandRegReg(REG_TMP2, REG_ACC2), "  1:");
+        GenAsm("", "sbc", OperandRegReg(REG_TMP3, REG_ACC3), "  1:");
+        break;
+    default:
+        Error(FATAL, "GenCompGEConditional: size not supported (%d)\n", iLeftSize);
+    }
+
+    if (pszTrue != NULL) {
+        if (fSigned) { GenAsm("", "brge", pszTrue, "1/2:  branch if (signed) GE TRUE"); }
+        else         { GenAsm("", "brsh", pszTrue, "1/2:  branch if (unsigned) GE TRUE"); }
+    }
+    if (pszFalse != NULL) {
+        if (fSigned) { GenAsm("", "brlt", pszFalse, "1/2:  branch if (signed) GE FALSE"); }
+        else         { GenAsm("", "brlo", pszFalse, "1/2:  branch if (unsigned) GE FALSE"); }
+    }
+    if (pszTrue == NULL) {
+        if (fSigned) { GenAsm("", "", "", "   :  fall through on (signed) GE TRUE"); }
+        else         { GenAsm("", "", "", "   :  fall through on (unsigned) GE TRUE"); }
+    }
+    if (pszFalse == NULL) {
+        if (fSigned) { GenAsm("", "", "", "   :  fall through on (signed) GE FALSE"); }
+        else         { GenAsm("", "", "", "   :  fall through on (unsigned) GE FALSE"); }
+    }
+}
+
+// ##########################################################################
+// #  Function: GenCompLogicalAnd
+// #        <todo: task brief description>
+// #
+// #        <todo: task detailed description>
+// #
+// #  Parameters:
+// #        <todo: params >
+// #
+// #  Returns:
+// #        <todo: return Value>
+// #
+// #  See Also:
+// #
+// ##########################################################################
+void GenCompLogicalAnd(TPExprNode pExpr) {
+
+    TPExprNode pLeft = pExpr->Use.Binary.pLeft;
+    TPExprNode pRight = pExpr->Use.Binary.pRight;
+    int iLeftSize = CalcSizeOf(pLeft->pType);
+    int iRightSize = CalcSizeOf(pRight->pType);
+
+    ASSERT(iLeftSize == iRightSize);                    // Confirm sizes match. 
+    ASSERT(iLeftSize == SIZE_BOOL);
+
+    LPSTR   szFalse = GenLabel("_LAndOut_");
+    GenExpr(pLeft);                                                // Left
+    GenAsm("", "tst",  OperandReg(REG_ACC0), "  1: Logical And");  // was it FALSE
+    GenAsm("", "breq", szFalse,              "1/2:");
+    GenExpr(pRight);                                               // Right.
+    GenAsm(szFalse,    "", "",               "   :");              // exit
+}
+
+// ##########################################################################
+// #  Function: GenCompLogicalAndConditional
+// #        <todo: task brief description>
+// #
+// #        <todo: task detailed description>
+// #
+// #  Parameters:
+// #        <todo: params >
+// #
+// #  Returns:
+// #        <todo: return Value>
+// #
+// #  See Also:
+// #
+// ##########################################################################
+void GenCompLogicalAndConditional(TPExprNode pExpr, LPSTR pszTrue, LPSTR pszFalse) {
+
+    TPExprNode pLeft = pExpr->Use.Binary.pLeft;
+    TPExprNode pRight = pExpr->Use.Binary.pRight;
+
+    ASSERT(IsBoolean(pLeft->pType));
+    ASSERT(IsBoolean(pRight->pType));
+
+    LPSTR   szAnd = GenLabel("_LAndRef_");                                                              //
+    GenAsm("", "", "", CommentString(0, "Logical AND start. ", szAnd));                                 // 
+
+    if (pszTrue != NULL && pszFalse != NULL) {                                                          // Both outcome destinations are defined.
+        GenExprConditional(pLeft,  NULL,    pszFalse);                                                  // Left
+        GenExprConditional(pRight, pszTrue, pszFalse);                                                  // Right
+        GenAsm("", "", "", CommentString(0, "Logical AND end", szAnd));                                 // exit
+    }
+    else if (pszFalse != NULL) {                                                                        // fall through to TRUE, jump to FALSE 
+        GenExprConditional(pLeft,  NULL, pszFalse);                                                     // Left
+        GenExprConditional(pRight, NULL, pszFalse);                                                     // Right
+        GenAsm("", "", "", CommentString(0, "Logical AND end (fall through to TRUE) ", szAnd));         // exit
+    }
+    else if (pszTrue != NULL) {                                                                         // jump to TRUE, fall through to FALSE
+        LPSTR szFalse = GenLabel("_LAndFalse_");                                                        //
+        GenExprConditional(pLeft, NULL, szFalse);                                                       // Left
+        GenExprConditional(pRight, pszTrue, NULL);                                                      // Right
+        GenAsm(szFalse, "", "", CommentString(0, "Logical AND end (fall through to FALSE) ", szAnd));   // exit
+        Dispose(szFalse);
+    }
+    else {
+        ASSERT(FALSE);
+    }
+
+    Dispose(szAnd);
+}
+
+
+// ##########################################################################
+// #  Function: GenCompLogicalOr
+// #        <todo: task brief description>
+// #
+// #        <todo: task detailed description>
+// #
+// #  Parameters:
+// #        <todo: params >
+// #
+// #  Returns:
+// #        <todo: return Value>
+// #
+// #  See Also:
+// #
+// ##########################################################################
+void GenCompLogicalOr(TPExprNode pExpr) {
+
+    TPExprNode pLeft = pExpr->Use.Binary.pLeft;
+    TPExprNode pRight = pExpr->Use.Binary.pRight;
+    int iLeftSize = CalcSizeOf(pLeft->pType);
+    int iRightSize = CalcSizeOf(pRight->pType);
+
+    ASSERT(iLeftSize == iRightSize);                                    // Confirm sizes match. 
+    ASSERT(iLeftSize == SIZE_BOOL);
+
+    LPSTR   szTrue = GenLabel("_LOrOut_");
+    GenExpr(pLeft);                                               // Left
+    GenAsm("", "tst",  OperandReg(REG_ACC0), "  1: Logical Or");  // was it TRUE
+    GenAsm("", "brne", szTrue,               "1/2:");
+    GenExpr(pRight);                                              // Right.
+    GenAsm(szTrue, "", "",                   "   :");             // exit
+}
+
+// ##########################################################################
+// #  Function: GenCompLogicalOrConditional
+// #        <todo: task brief description>
+// #
+// #        <todo: task detailed description>
+// #
+// #  Parameters:
+// #        <todo: params >
+// #
+// #  Returns:
+// #        <todo: return Value>
+// #
+// #  See Also:
+// #
+// ##########################################################################
+void GenCompLogicalOrConditional(TPExprNode pExpr, LPSTR pszTrue, LPSTR pszFalse) {
+
+    TPExprNode pLeft = pExpr->Use.Binary.pLeft;
+    TPExprNode pRight = pExpr->Use.Binary.pRight;
+
+    ASSERT(IsBoolean(pLeft->pType));
+    ASSERT(IsBoolean(pRight->pType));
+
+    LPSTR   szOr = GenLabel("_LOrRef_");                                                            //
+    GenAsm("", "", "", CommentString(0, "Logical OR start. ", szOr));                               // 
+
+    if (pszTrue != NULL && pszFalse != NULL) {                                                      // Both outcome destinations are defined.
+        GenExprConditional(pLeft, pszTrue, NULL);                                                   // Left
+        GenExprConditional(pRight, pszTrue, pszFalse);                                              // Right
+        GenAsm("", "", "", CommentString(0, "Logical OR end", szOr));                               // exit
+    }
+    else if (pszFalse != NULL) {                                                                    // fall through to TRUE, jump to FALSE 
+        LPSTR szTrue = GenLabel("_LOrTrue_");                                                       //
+        GenExprConditional(pLeft, szTrue, NULL);                                                    // Left
+        GenExprConditional(pRight, NULL, pszFalse);                                                 // Right
+        GenAsm(szTrue, "", "", CommentString(0, "Logical OR end (fall through to TRUE) ", szOr));   // exit
+        Dispose(szTrue);
+    }
+    else if (pszTrue != NULL) {                                                                     // jump to TRUE, fall through to FALSE
+        GenAsm("", "", "", "   : Logical AND start");                                               // exit
+        GenExprConditional(pLeft, pszTrue, NULL);                                                   // Left
+        GenExprConditional(pRight, pszTrue, NULL);                                                  // Right
+        GenAsm("", "", "", CommentString(0, "Logical OR end (fall through to FALSE) ", szOr));      // exit
+    }
+    else {
+        ASSERT(FALSE);
+    }
+
+    Dispose(szOr);
+}
+
+
+// ##########################################################################
+// #  Function: GenExprConst
+// #        <todo: task brief description>
+// #
+// #        <todo: task detailed description>
+// #
+// #  Parameters:
+// #        <todo: params >
+// #
+// #  Returns:
+// #        <todo: return Value>
+// #
+// #  See Also:
+// #
+// ##########################################################################
+void GenExprConst(int iReg, TPExprNode pExpr) {
+    switch (CalcSizeOf(pExpr->pType)) {
+    case 1:     AVR_LoadImmediate8(iReg, (unsigned char)pExpr->Use.Const.lInteger);   return;
+    case 2:     AVR_LoadImmediate16(iReg, (unsigned short)pExpr->Use.Const.lInteger); return;
+    case 4:     AVR_LoadImmediate32(iReg, (unsigned long)pExpr->Use.Const.lInteger);  return;
+    default:    Error(FATAL, "GenExprConst: Size?\n");
+    }
+}
+
+// ##########################################################################
+// #  Function: GenExprVar
+// #        <todo: task brief description>
+// #
+// #        <todo: task detailed description>
+// #
+// #  Parameters:
+// #        <todo: params >
+// #
+// #  Returns:
+// #        <todo: return Value>
+// #
+// #  See Also:
+// #
+// ##########################################################################
+void GenExprVar(int iReg, TPExprNode pExpr) {
+    if (pExpr->Use.Var.iFrameOffset == GLOBAL_VAR) {
+        if (pExpr->pType->Usage == DecArray) {                                                                                                           // named global array
+            GenAsm("", "ldi", OperandRegVar(iReg + REG_ORDER0, pExpr->Use.Var.pszIdentifier), CommentString(1, "Z = &", pExpr->Use.Var.pszIdentifier));  // we want its address.
+            GenAsm("", "ldi", OperandRegVar(iReg + REG_ORDER1, pExpr->Use.Var.pszIdentifier), "  1:");
+            return;
+        }
+        if ((pExpr->pType->Use.DecSpec.Qual & QualCONST) == QualCONST) {                                                                        // named variable
+            switch (CalcSizeOf(pExpr->pType)) {                                                                                                 // we want its contents
+            case 1:     AVR_LoadRom8(iReg, pExpr->Use.Var.pszIdentifier); return;
+            case 2:     AVR_LoadRom16(iReg, pExpr->Use.Var.pszIdentifier); return;
+            case 4:     AVR_LoadRom32(iReg, pExpr->Use.Var.pszIdentifier); return;
+            default:    Error(FATAL, "GenExprVar Rom: Size?\n");
+            }
+            return;
+        }
+        else {
+            switch (CalcSizeOf(pExpr->pType)) {
+            case 1:     AVR_LoadRam8(iReg, pExpr->Use.Var.pszIdentifier); return;
+            case 2:     AVR_LoadRam16(iReg, pExpr->Use.Var.pszIdentifier); return;
+            case 4:     AVR_LoadRam32(iReg, pExpr->Use.Var.pszIdentifier); return;
+            default:    Error(FATAL, "GenExprVar Ram: Size?\n");
+            }
+            return;
+        }
+    }
+    else {
+        if (pExpr->pType->Usage == DecArray) {                                                                             // named local array
+            GenAsm("", "movw",  OperandRegReg(30, 28), "  1: Z = frame ptr");                                              // we want its address.
+            GenAsm("", "adiw", OperandRegImmediate(30, iGlbLocalSize + pExpr->Use.Var.iFrameOffset), CommentString(2, "Z = &", pExpr->Use.Var.pszIdentifier));
+            GenAsm("", "movw", OperandRegReg(iReg+ REG_ORDER0, 30), "  1:");
+            return;
+        }
+        switch (CalcSizeOf(pExpr->pType)) {
+        case 1:     AVR_LoadFrame8( iReg, pExpr->Use.Var.iFrameOffset, pExpr->Use.Var.pszIdentifier); return;
+        case 2:     AVR_LoadFrame16(iReg, pExpr->Use.Var.iFrameOffset, pExpr->Use.Var.pszIdentifier); return;
+        case 4:     AVR_LoadFrame32(iReg, pExpr->Use.Var.iFrameOffset, pExpr->Use.Var.pszIdentifier); return;
+        default:    Error(FATAL, "GenExprVar frame: Size?\n");
+        }
+        return;
+    }
+}
+
+
+// ##########################################################################
+// #  Function: GenExprCast
+// #        <todo: task brief description>
+// #
+// #        <todo: task detailed description>
+// #
+// #  Parameters:
+// #        <todo: params >
+// #
+// #  Returns:
+// #        <todo: return Value>
+// #
+// #  See Also:
+// #
+// ##########################################################################
+void SignExtend(int iReg, int iExtra) {
+    char szComment[36];
+    switch (iExtra) {
+    case 1: sprintf_s(szComment, sizeof(szComment), "  1: Signed extend 8 to 16 bits");              // 8->16
+            GenAsm("", "mov", OperandRegReg(iReg + REG_ORDER1, iReg+ REG_ORDER0),  szComment);
+            GenAsm("", "lsl", OperandReg(iReg + REG_ORDER1),                       "  1:");
+            GenAsm("", "clr", OperandReg(iReg + REG_ORDER1),                       "  1: ");
+            GenAsm("", "sbc", OperandRegReg(iReg + REG_ORDER1, iReg + REG_ORDER1), "  1:");
+            break;
+    case 2: sprintf_s(szComment, sizeof(szComment), "  1: Signed extend 16 to 32 bits");            // 16->32
+            GenAsm("", "mov", OperandRegReg(iReg + REG_ORDER2, iReg+ REG_ORDER1),  szComment);
+            GenAsm("", "lsl", OperandReg(iReg + REG_ORDER2),                       "  1:");
+            GenAsm("", "clr", OperandReg(iReg + REG_ORDER2),                       "  1: ");
+            GenAsm("", "sbc", OperandRegReg(iReg + REG_ORDER2, iReg + REG_ORDER2), "  1:");
+            GenAsm("", "mov", OperandRegReg(iReg + REG_ORDER3, iReg + REG_ORDER2), "  1:");
+            break;
+    case 3: sprintf_s(szComment, sizeof(szComment), "  1: Signed extend 8 to 32 bits");            // 8->32
+            GenAsm("", "mov", OperandRegReg(iReg + REG_ORDER1, iReg + REG_ORDER0), szComment);
+            GenAsm("", "lsl", OperandReg(iReg + REG_ORDER1),                       "  1:");
+            GenAsm("", "clr", OperandReg(iReg + REG_ORDER1),                       "  1: ");
+            GenAsm("", "sbc", OperandRegReg(iReg + REG_ORDER1, iReg + REG_ORDER1), "  1:");
+            GenAsm("", "mov", OperandRegReg(iReg + REG_ORDER2, iReg + REG_ORDER1), "  1:");
+            GenAsm("", "mov", OperandRegReg(iReg + REG_ORDER3, iReg + REG_ORDER2), "  1:");
+            break;
+    default: Error(FATAL, "SignExtend: size problem");
+    }
+}
+
+void UnsignExtend(int iReg, int iExtra) {
+    char szComment[36];
+    switch (iExtra) {
+    case 1: sprintf_s(szComment, sizeof(szComment), "  1: unsigned extend 8 to 16 bits");       // 8->16
+            GenAsm("", "clr", OperandReg(iReg + REG_ORDER1), szComment);
+            break;
+    case 2: sprintf_s(szComment, sizeof(szComment), "  1: unsigned extend 16 to 32 bits");      // 16->32
+            GenAsm("", "clr", OperandReg(iReg + REG_ORDER2), szComment);
+            GenAsm("", "clr", OperandReg(iReg + REG_ORDER3), szComment);
+            break;
+    case 3: sprintf_s(szComment, sizeof(szComment), "  1: unsigned extend 8 to 32 bits");       // 8->32
+            GenAsm("", "clr", OperandReg(iReg + REG_ORDER1), szComment);
+            GenAsm("", "clr", OperandReg(iReg + REG_ORDER2), szComment);
+            GenAsm("", "clr", OperandReg(iReg + REG_ORDER3), szComment);
+            break;
+    default: Error(FATAL, "UnsignExtend: size problem");
+    }
+}
+
+// ##########################################################################
+// #  Function: LongToFlag
+// #  Function: ShortToFlag
+// #  Function: LongToFlag
+// #        Arithmetic value to flag value.
+// #
+// #  Parameters:
+// #        <todo: params >
+// #
+// #  Returns:
+// #        <todo: return Value>
+// #
+// #  See Also:
+// #
+// ##########################################################################
+
+static void LongToFlag(int iReg) {
+    GenAsm("", "or", OperandRegReg(iReg + REG_ORDER0, iReg + REG_ORDER1),  "  1: Cast Long to Flag");
+    GenAsm("", "or", OperandRegReg(iReg + REG_ORDER0, iReg + REG_ORDER2),  "  1:");
+    GenAsm("", "or", OperandRegReg(iReg + REG_ORDER0, iReg + REG_ORDER3),  "  1:");
+    GenAsm("", "subi", OperandRegImmediate(iReg + REG_ORDER0, 1),          "  1:");
+    GenAsm("", "sbc", OperandRegReg(iReg + REG_ORDER0, iReg + REG_ORDER0), "  1:");
+    GenAsm("", "andi", OperandRegImmediate(iReg + REG_ORDER0, 1),          "  1:");
+}
+
+static void ShortToFlag(int iReg) {
+    GenAsm("", "or", OperandRegReg(iReg + REG_ORDER0, iReg + REG_ORDER1),  "  1: Cast Short to Flag");
+    GenAsm("", "subi", OperandRegImmediate(iReg + REG_ORDER0, 1),          "  1:");
+    GenAsm("", "sbc", OperandRegReg(iReg + REG_ORDER0, iReg + REG_ORDER0), "  1:");
+    GenAsm("", "andi", OperandRegImmediate(iReg + REG_ORDER0, 1),          "  1:");
+}
+
+static void ByteToFlag(int iReg) {
+    GenAsm("", "or", OperandRegReg(iReg + REG_ORDER0, iReg + REG_ORDER0),  "  1: Cast Byte to Flag");
+    GenAsm("", "subi", OperandRegImmediate(iReg + REG_ORDER0, 1),          "  1:");
+    GenAsm("", "sbc", OperandRegReg(iReg + REG_ORDER0, iReg + REG_ORDER0), "  1:");
+    GenAsm("", "andi", OperandRegImmediate(iReg + REG_ORDER0, 1),          "  1:");
+}
+
+// ##########################################################################
+// #  Function: ByteToFlagConditional
+// #  Function: ShortToFlagConditional
+// #  Function: LongToFlagConditional
+// #        Arithmetic value to appropriate jump statements.
+// #
+// #  Parameters:
+// #        <todo: params >
+// #
+// #  Returns:
+// #        <todo: return Value>
+// #
+// #  See Also:
+// #
+// ##########################################################################
+
+static void FlagConditionalCommonExit(LPSTR pzsTrue, LPSTR pszFalse);  // forward
+
+static void LongToFlagConditional(int iReg, LPSTR pzsTrue, LPSTR pszFalse) {
+    GenAsm("", "or", OperandRegReg(iReg + REG_ORDER2, iReg + REG_ORDER3), "  1: Cast Long to Flag");
+    GenAsm("", "or", OperandRegReg(iReg + REG_ORDER1, iReg + REG_ORDER2), "  1:");
+    GenAsm("", "or", OperandRegReg(iReg + REG_ORDER0, iReg + REG_ORDER1), "  1:");
+    FlagConditionalCommonExit(pzsTrue, pszFalse);
+}
+
+static void ShortToFlagConditional(int iReg, LPSTR pzsTrue, LPSTR pszFalse) {
+    GenAsm("", "or", OperandRegReg(iReg + REG_ORDER0, iReg + REG_ORDER1), "  1: Cast Short to Flag");
+    FlagConditionalCommonExit(pzsTrue, pszFalse);
+}
+
+static void ByteToFlagConditional(int iReg, LPSTR pzsTrue, LPSTR pszFalse) {
+    GenAsm("", "tst", OperandReg(iReg + REG_ORDER0), "  1: Cast Byte to Flag");
+    FlagConditionalCommonExit(pzsTrue, pszFalse);
+}
+
+static void FlagConditionalCommonExit(LPSTR pzsTrue, LPSTR pszFalse) {
+    if (pzsTrue  != NULL) { GenAsm("", "brne", pzsTrue,  "1/2: branch if TRUE");       }
+    if (pszFalse != NULL) { GenAsm("", "breq", pszFalse, "1/2: branch if FALSE");      }
+    if (pzsTrue  == NULL) { GenAsm("", "",     "",       "   : fall through on TRUE"); }
+    if (pszFalse == NULL) { GenAsm("", "",     "",       "   : fall through on FALSE");}
+}
+
+
+
+// ##########################################################################
+// #  Function: GenExprCast
+// #        <todo: task brief description>
+// #
+// #        <todo: task detailed description>
+// #
+// #  Parameters:
+// #        <todo: params >
+// #
+// #  Returns:
+// #        <todo: return Value>
+// #
+// #  See Also:
+// #
+// ##########################################################################
+void GenExprCast(TPExprNode pExpr) {
+    ASSERT(pExpr->Usage == uCast);
+
+    GenExpr(pExpr->Use.Cast.pTarget);                        // Calculate whatever it is we are casting.
+    switch (pExpr->Use.Cast.Op) {
+    case Cast_c2s: SignExtend(REG_ACC,   (SIZE_SHORT - SIZE_CHAR)); return;  //   signed  8 to 16
+    case Cast_c2l: SignExtend(REG_ACC,   (SIZE_LONG - SIZE_CHAR));  return;  //   signed  8 to 32
+    case Cast_s2l: SignExtend(REG_ACC,   (SIZE_LONG - SIZE_SHORT)); return;  //   signed 16 to 32
+    case Cast_b2s: UnsignExtend(REG_ACC, (SIZE_SHORT - SIZE_CHAR)); return;  // unsigned  8 to 16
+    case Cast_b2l: UnsignExtend(REG_ACC, (SIZE_LONG - SIZE_CHAR));  return;  // unsigned  8 to 32
+    case Cast_u2l: UnsignExtend(REG_ACC, (SIZE_LONG - SIZE_SHORT)); return;  // unsigned 16 to 32
+    case Cast_l2s: /* iReg - (SIZE_LONG - SIZE_SHORT); */           return;  //          32 to 16
+    case Cast_l2b: /* iReg - (SIZE_LONG - SIZE_CHAR);  */           return;  //          32 to  8
+    case Cast_l2f: LongToFlag(REG_ACC);                             return;  //          32 to size of flag
+    case Cast_s2b: /* iReg - (SIZE_SHORT - SIZE_CHAR); */           return;  //          16 to  8
+    case Cast_s2f: ShortToFlag(REG_ACC);                            return;  //          16 to size of flag
+    case Cast_b2f: ByteToFlag(REG_ACC);                             return;  //           8 to size of flag
+    default:
+        Error(FATAL, "GenExprCast: Unknown cast (%d)\n", pExpr->Use.Cast.Op);
+    }
+}
+
+static void GenExprCastConditional(TPExprNode pExpr, LPSTR pzsTrue, LPSTR pszFalse) {
+    ASSERT(pExpr->Usage == uCast);
+    ASSERT(IsBoolean(pExpr->pType));
+
+    GenExpr(pExpr->Use.Cast.pTarget);                                           // Calculate whatever it is we are casting. 
+                                                                                // It can't be conditional or we wouldn't be here casting it!
+
+    switch (pExpr->Use.Cast.Op) {
+    case Cast_l2f: LongToFlagConditional(REG_ACC, pzsTrue, pszFalse);  return;  // 32 to size of flag
+    case Cast_s2f: ShortToFlagConditional(REG_ACC, pzsTrue, pszFalse); return;  // 16 to size of flag
+    case Cast_b2f: ByteToFlagConditional(REG_ACC, pzsTrue, pszFalse);  return;  //  8 to size of flag
+    default:
+        Error(FATAL, "GenExprCastConditional: Unknown cast (%d)\n", pExpr->Use.Cast.Op);
+    }
+}
+
+// ##########################################################################
+// #  Function: UnaryMinus
+// #        <todo: task brief description>
+// #
+// #        <todo: task detailed description>
+// #
+// #  Parameters:
+// #        <todo: params >
+// #
+// #  Returns:
+// #        <todo: return Value>
+// #
+// #  See Also:
+// #
+// ##########################################################################
+static void UnaryMinus(TPExprNode pExpr) {
+    int iSize = CalcSizeOf(pExpr->pType);
+    GenExpr(pExpr);                                           // Calc decendant.
+    switch (iSize) {
+    case 1:
+        GenAsm("", "neg", OperandReg(REG_ACC0),               "  1: Negate8    r = -r");
+        break;
+    case 2:
+        GenAsm("", "movw", OperandRegReg(REG_TMP0, REG_ACC0), "  1: Negate16    r = -r");
+        GenAsm("", "clr",  OperandReg(REG_ACC0),              "  1:");
+        GenAsm("", "clr",  OperandReg(REG_ACC1),              "  1:");
+        GenAsm("", "sub",  OperandRegReg(REG_ACC0, REG_TMP0), "  1:");
+        GenAsm("", "sbc",  OperandRegReg(REG_ACC1, REG_TMP1), "  1:");
+        break;
+    case 4:                 
+        GenAsm("", "movw", OperandRegReg(REG_TMP0, REG_ACC0), "  1: Negate32    r = -r");
+        GenAsm("", "movw", OperandRegReg(REG_TMP2, REG_ACC2), "  1:");
+        GenAsm("", "clr",  OperandReg(REG_ACC0),              "  1:");
+        GenAsm("", "clr",  OperandReg(REG_ACC1),              "  1:");
+        GenAsm("", "movw", OperandRegReg(REG_ACC2, REG_ACC0), "  1:");
+        GenAsm("", "sub",  OperandRegReg(REG_ACC0, REG_TMP0), "  1:");
+        GenAsm("", "sbc",  OperandRegReg(REG_ACC1, REG_TMP1), "  1:");
+        GenAsm("", "sbc",  OperandRegReg(REG_ACC2, REG_TMP2), "  1:");
+        GenAsm("", "sbc",  OperandRegReg(REG_ACC3, REG_TMP3), "  1:");
+        break;
+    default:
+        Error(FATAL, "UnaryMinus: size not supported (%d)\n", iSize);
+    }
+}
+
+// ##########################################################################
+// #  Function: UnaryPlus
+// #        <todo: task brief description>
+// #
+// #        <todo: task detailed description>
+// #
+// #  Parameters:
+// #        <todo: params >
+// #
+// #  Returns:
+// #        <todo: return Value>
+// #
+// #  See Also:
+// #
+// ##########################################################################
+static void UnaryPlus(TPExprNode pExpr) {
+    GenExpr(pExpr);                                           // Calc decendant.
+}
+
+// ##########################################################################
+// #  Function: UnaryNeg
+// #        <todo: task brief description>
+// #
+// #        <todo: task detailed description>
+// #
+// #  Parameters:
+// #        <todo: params >
+// #
+// #  Returns:
+// #        <todo: return Value>
+// #
+// #  See Also:
+// #
+// ##########################################################################
+static void UnaryNeg(TPExprNode pExpr) {
+    int iSize = CalcSizeOf(pExpr->pType);
+    GenExpr(pExpr);                                           // Calc decendant.
+    switch (iSize) {
+    case 1:
+        GenAsm("", "com", OperandReg(REG_ACC0), "  1: Compliment8    r = ~r");
+        break;
+    case 2:
+        GenAsm("", "com", OperandReg(REG_ACC0), "  1: Compliment16   r = ~r");
+        GenAsm("", "com", OperandReg(REG_ACC1), "  1:");
+        break;
+    case 4:
+        GenAsm("", "com", OperandReg(REG_ACC0), "  1: Compliment32   r = ~r");
+        GenAsm("", "com", OperandReg(REG_ACC1), "  1:");
+        GenAsm("", "com", OperandReg(REG_ACC2), "  1:");
+        GenAsm("", "com", OperandReg(REG_ACC3), "  1:");
+        break;
+    default:
+        Error(FATAL, "UnaryNeg: size not supported (%d)\n", iSize);
+    }
+}
+
+// ##########################################################################
+// #  Function: UnaryNot
+// #        <todo: task brief description>
+// #
+// #        <todo: task detailed description>
+// #
+// #  Parameters:
+// #        <todo: params >
+// #
+// #  Returns:
+// #        <todo: return Value>
+// #
+// #  See Also:
+// #
+// ##########################################################################
+static void UnaryNot(TPExprNode pExpr) {
+
+    int iSize = CalcSizeOf(pExpr->pType);
+    ASSERT(iSize == SIZE_BOOL);
+    GenExpr(pExpr);                                             // Calc decendant.
+    GenAsm("",       "sub",  OperandRegImmediate(REG_ACC0, 1),  "  1: Invert Flag (0==>1, 1-255==>0)");
+    GenAsm("",       "clr",  OperandReg(REG_ACC0),              "  1: ");
+    GenAsm("",       "rol",  OperandReg(REG_ACC0),              "  1: ");
+}
+
+
+// ##########################################################################
+// #  Function: UnaryNot
+// #        <todo: task brief description>
+// #
+// #        <todo: task detailed description>
+// #
+// #  Parameters:
+// #        <todo: params >
+// #
+// #  Returns:
+// #        <todo: return Value>
+// #
+// #  See Also:
+// #
+// ##########################################################################
+static void UnaryNotConditional(TPExprNode pExpr, LPSTR pszTrue, LPSTR pszFalse) {
+    ASSERT(IsBoolean(pExpr->pType));
+
+    GenExprConditional(pExpr, pszFalse, pszTrue);   // Calc decendant.
+}
+
+
+// ##########################################################################
+// #  Function: UnaryPtr
+// #        <todo: task brief description>
+// #
+// #        <todo: task detailed description>
+// #
+// #  Parameters:
+// #        <todo: params >
+// #
+// #  Returns:
+// #        <todo: return Value>
+// #
+// #  See Also:
+// #
+// ##########################################################################
+static void UnaryPtr(TPExprNode pExpr) {
+    int iSize = CalcSizeOf(pExpr->pType);
+    ASSERT(iSize == SIZE_PTR_DEFAULT);
+    GenExpr(pExpr);                                           // Calc decendant.
+
+    ASSERT(pExpr->pType->Usage == DecPtr);
+    TPDeclSpec pTarget = pExpr->pType->Use.DecPtr.pTarget;
+
+    GenAsm("", "movw", OperandRegReg(30, REG_ACC0),          "  1: de-ref pointer");
+    if (IsTypeQualifierConst(pTarget)) {
+        switch (CalcSizeOf(pTarget)) {
+        case 1:
+            GenAsm("", "lpm", OperandRegStr(REG_ACC0, "Z"),  "  3: data is in ROM");
+            return;
+        case 2:
+            GenAsm("", "lpm", OperandRegStr(REG_ACC0, "Z+"), "  3: data is in ROM");
+            GenAsm("", "lpm", OperandRegStr(REG_ACC1, "Z+"), "  3:");
+            return;
+        case 4:
+            GenAsm("", "lpm", OperandRegStr(REG_ACC0, "Z+"), "  3: data is in ROM");
+            GenAsm("", "lpm", OperandRegStr(REG_ACC1, "Z+"), "  3:");
+            GenAsm("", "lpm", OperandRegStr(REG_ACC2, "Z+"), "  3:");
+            GenAsm("", "lpm", OperandRegStr(REG_ACC3, "Z+"), "  3:");
+            return;
+        default:
+            Error(FATAL, "UnaryPtr to unknown sized object");
+            return;
+        }
+    }
+    else {
+        switch (CalcSizeOf(pTarget)) {
+        case 1:
+            GenAsm("", "ld", OperandRegStr(REG_ACC0, "Z"),   "  1: data is in RAM");
+            return;
+        case 2:
+            GenAsm("", "ld",  OperandRegStr(REG_ACC0, "Z"),   "  1: data is in RAM");
+            GenAsm("", "ldd", OperandRegStr(REG_ACC1, "Z+1"), "  2:");
+            return;
+        case 4:
+            GenAsm("", "ld",  OperandRegStr(REG_ACC0, "Z"),   "  1: data is in RAM");
+            GenAsm("", "ldd", OperandRegStr(REG_ACC1, "Z+1"), "  2:");
+            GenAsm("", "ldd", OperandRegStr(REG_ACC2, "Z+2"), "  2:");
+            GenAsm("", "ldd", OperandRegStr(REG_ACC3, "Z+3"), "  2:");
+            return;
+        default:
+            Error(FATAL, "UnaryPtr to unknown sized object");
+            return;
+        }
+    }
+}
+
+// ##########################################################################
+// #  Function: UnaryPtrPostInc
+// #        <todo: task brief description>
+// #
+// #        <todo: task detailed description>
+// #
+// #  Parameters:
+// #        <todo: params >
+// #
+// #  Returns:
+// #        <todo: return Value>
+// #
+// #  See Also:
+// #
+// ##########################################################################
+static void UnaryPtrPostInc(TPExprNode pExpr) {                            // Post increment the pointer's target
+    int iSize = CalcSizeOf(pExpr->pType);
+    ASSERT(iSize == SIZE_PTR_DEFAULT);
+    GenExpr(pExpr);                                                        // Calc decendant.
+
+    ASSERT(pExpr->pType->Usage == DecPtr);
+    TPDeclSpec pTarget = pExpr->pType->Use.DecPtr.pTarget;
+
+    GenAsm("", "movw", OperandRegReg(30, REG_ACC0), "  1: de-ref pointer");     // even move
+
+    if (IsTypeQualifierConst(pTarget)) {
+        Error(ERRORX, "const data cannot be incremented.");
+        return;
+    }
+    else {
+        switch (CalcSizeOf(pTarget)) {
+        case 1:
+            GenAsm("", "ld",  OperandRegStr(REG_ACC0, "Z"),          "  1: data is in RAM");
+            GenAsm("", "mov", OperandRegReg(REG_TMP0, REG_ACC0),     "  1: post increment 8");
+            GenAsm("", "inc", OperandReg(REG_TMP0),                  "  1:");
+            GenAsm("", "st",  OperandStrReg("Z", REG_TMP0),          "  1:");
+            return;                                            
+        case 2:                                                
+#pragma message("** BUG *** UnaryPtrPostInc if the target is a pointer the increment size changes!!!!!")
+            GenAsm("", "ld",   OperandRegStr(REG_ACC0, "Z"),         "  1: data is in RAM");
+            GenAsm("", "ldd",  OperandRegStr(REG_ACC1, "Z+1"),       "  2:");
+            GenAsm("", "movw", OperandRegReg(REG_TMP0, REG_ACC0),    "  1: post increment 16");
+            GenAsm("", "adiw", OperandRegImmediate(REG_TMP0, 1),     "  1:");
+            GenAsm("", "st",   OperandStrReg("Z", REG_TMP0),         "  1:");
+            GenAsm("", "std",  OperandStrReg("Z+1", REG_TMP1),       "  2:");
+            return;
+        case 4:                                                
+            GenAsm("", "ld",  OperandRegStr(REG_ACC0, "Z"),          "  1: data is in RAM");
+            GenAsm("", "ldd", OperandRegStr(REG_ACC1, "Z+1"),        "  2:");
+            GenAsm("", "ldd", OperandRegStr(REG_ACC2, "Z+2"),        "  2:");
+            GenAsm("", "ldd", OperandRegStr(REG_ACC3, "Z+3"),        "  2:");
+            GenAsm("", "movw", OperandRegReg(REG_TMP0, REG_ACC0),    "  1: post increment 32");
+            GenAsm("", "movw", OperandRegReg(REG_TMP2, REG_ACC2),    "  1:");
+            GenAsm("", "subi", OperandRegImmediate(REG_TMP0, 0xff),  "  1:");
+            GenAsm("", "sbci", OperandRegImmediate(REG_TMP1, 0xff),  "  1:");
+            GenAsm("", "sbci", OperandRegImmediate(REG_TMP2, 0xff),  "  1:");
+            GenAsm("", "sbci", OperandRegImmediate(REG_TMP3, 0xff),  "  1:");
+            GenAsm("", "st",  OperandStrReg("Z", REG_TMP0),          "  1:");
+            GenAsm("", "std", OperandStrReg("Z+1", REG_TMP1),        "  2:");
+            GenAsm("", "std", OperandStrReg("Z+2", REG_TMP2),        "  2:");
+            GenAsm("", "std", OperandStrReg("Z+3", REG_TMP3),        "  2:");
+            return;
+        default:
+            Error(FATAL, "UnaryPtrPostInc to unknown sized object");
+            return;
+        }
+    }
+}
+
+// ##########################################################################
+// #  Function: UnaryPtrPostDec
+// #        <todo: task brief description>
+// #
+// #        <todo: task detailed description>
+// #
+// #  Parameters:
+// #        <todo: params >
+// #
+// #  Returns:
+// #        <todo: return Value>
+// #
+// #  See Also:
+// #
+// ##########################################################################
+static void UnaryPtrPostDec(TPExprNode pExpr) {                             // Post decrement the pointer's target
+    int iSize = CalcSizeOf(pExpr->pType);
+    ASSERT(iSize == SIZE_PTR_DEFAULT);
+    GenExpr(pExpr);                                                         // Calc decendant.
+
+    ASSERT(pExpr->pType->Usage == DecPtr);
+    TPDeclSpec pTarget = pExpr->pType->Use.DecPtr.pTarget;
+
+    GenAsm("", "movw", OperandRegReg(30, REG_ACC0), "  1: de-ref pointer");       // even move
+
+    if (IsTypeQualifierConst(pTarget)) {
+        Error(ERRORX, "const data cannot be decremented.");
+        return;
+    }
+    else {
+        switch (CalcSizeOf(pTarget)) {
+        case 1:
+            GenAsm("", "ld",  OperandRegStr(REG_ACC0, "Z"),          "  1: data is in RAM");
+            GenAsm("", "mov", OperandRegReg(REG_TMP0, REG_ACC0),     "  1: post decrement 8");
+            GenAsm("", "inc", OperandReg(REG_TMP0),                  "  1:");
+            GenAsm("", "st",  OperandStrReg("Z", REG_TMP0),          "  1:");
+            return;                                            
+        case 2:                                                
+#pragma message("** BUG *** UnaryPtrPostDec if the target is a pointer the increment size changes!!!!!")
+            GenAsm("", "ld",   OperandRegStr(REG_ACC0, "Z"),         "  1: data is in RAM");
+            GenAsm("", "ldd",  OperandRegStr(REG_ACC1, "Z+1"),       "  2:");
+            GenAsm("", "movw", OperandRegReg(REG_TMP0, REG_ACC0),    "  1: post decrement 16");
+            GenAsm("", "sbiw", OperandRegImmediate(REG_TMP0, 1),     "  1:");
+            GenAsm("", "st",   OperandStrReg("Z",   REG_TMP0),       "  1:");
+            GenAsm("", "std",  OperandStrReg("Z+1", REG_TMP1),       "  2:");
+            return;
+        case 4:                                                
+            GenAsm("", "ld",   OperandRegStr(REG_ACC0, "Z"),         "  1: data is in RAM");
+            GenAsm("", "ldd",  OperandRegStr(REG_ACC1, "Z+1"),       "  2:");
+            GenAsm("", "ldd",  OperandRegStr(REG_ACC2, "Z+2"),       "  2:");
+            GenAsm("", "ldd",  OperandRegStr(REG_ACC3, "Z+3"),       "  2:");
+            GenAsm("", "movw", OperandRegReg(REG_TMP0, REG_ACC0),    "  1: post decrement 32");
+            GenAsm("", "movw", OperandRegReg(REG_TMP2, REG_ACC2),    "  1:");
+            GenAsm("", "subi", OperandRegImmediate(REG_TMP0, 0x01),  "  1:");
+            GenAsm("", "sbci", OperandRegImmediate(REG_TMP1, 0x00),  "  1:");
+            GenAsm("", "sbci", OperandRegImmediate(REG_TMP2, 0x00),  "  1:");
+            GenAsm("", "sbci", OperandRegImmediate(REG_TMP3, 0x00),  "  1:");
+            GenAsm("", "st",   OperandStrReg("Z",   REG_TMP0),       "  1:");
+            GenAsm("", "std",  OperandStrReg("Z+1", REG_TMP1),       "  2:");
+            GenAsm("", "std",  OperandStrReg("Z+2", REG_TMP2),       "  2:");
+            GenAsm("", "std",  OperandStrReg("Z+3", REG_TMP3),       "  2:");
+            return;
+        default:
+            Error(FATAL, "UnaryPtrPostDec to unknown sized object");
+            return;
+        }
+    }
+}
+
+// ##########################################################################
+// #  Function: UnaryPtrPreInc
+// #        <todo: task brief description>
+// #
+// #        <todo: task detailed description>
+// #
+// #  Parameters:
+// #        <todo: params >
+// #
+// #  Returns:
+// #        <todo: return Value>
+// #
+// #  See Also:
+// #
+// ##########################################################################
+static void UnaryPtrPreInc(TPExprNode pExpr) {                                      // Pre increment the pointer's target
+    int iSize = CalcSizeOf(pExpr->pType);
+    ASSERT(iSize == SIZE_PTR_DEFAULT);
+    GenExpr(pExpr);                                                                 // Calc decendant.
+
+    ASSERT(pExpr->pType->Usage == DecPtr);
+    TPDeclSpec pTarget = pExpr->pType->Use.DecPtr.pTarget;
+
+    GenAsm("", "movw", OperandRegReg(30, REG_ACC0), "  1: de-ref pointer");               // even move
+
+    if (IsTypeQualifierConst(pTarget)) {
+        Error(ERRORX, "const data cannot be incremented.");
+        return;
+    }
+    else {
+        switch (CalcSizeOf(pTarget)) {
+        case 1:
+            GenAsm("", "ld",  OperandRegStr(REG_ACC0, "Z"),        "  1: data is in RAM");
+            GenAsm("", "inc", OperandReg(REG_ACC0),                "  1: pre increment 8");
+            GenAsm("", "st",  OperandStrReg("Z", REG_ACC0),        "  1:");
+            return;
+        case 2:
+#pragma message("** BUG *** UnaryPtrPreInc if the target is a pointer the increment size changes!!!!!")
+            GenAsm("", "ld",  OperandRegStr(REG_ACC0,  "Z"),       "  1: data is in RAM");
+            GenAsm("", "ldd", OperandRegStr(REG_ACC1, "Z+1"),      "  2: pre increment 16");
+            GenAsm("", "adiw",OperandRegImmediate(REG_ACC0, 1),    "  1:");
+            GenAsm("", "st",  OperandStrReg("Z", REG_ACC0),        "  1:");
+            GenAsm("", "std", OperandStrReg("Z+1", REG_ACC1),      "  2:");
+            return;
+        case 4:
+            GenAsm("", "ld",  OperandRegStr(REG_ACC0, "Z"),        "  1: data is in RAM");
+            GenAsm("", "ldd", OperandRegStr(REG_ACC1, "Z+1"),      "  2: pre increment 32");
+            GenAsm("", "ldd", OperandRegStr(REG_ACC2, "Z+2"),      "  2:");
+            GenAsm("", "ldd", OperandRegStr(REG_ACC3, "Z+3"),      "  2:");
+            GenAsm("", "subi",OperandRegImmediate(REG_ACC0, 0xff), "  1:");
+            GenAsm("", "sbci",OperandRegImmediate(REG_ACC1, 0xff), "  1:");
+            GenAsm("", "sbci",OperandRegImmediate(REG_ACC2, 0xff), "  1:");
+            GenAsm("", "sbci",OperandRegImmediate(REG_ACC3, 0xff), "  1:");
+            GenAsm("", "st",  OperandStrReg("Z",   REG_ACC0),      "  1:");
+            GenAsm("", "std", OperandStrReg("Z+1", REG_ACC1),      "  2:");
+            GenAsm("", "std", OperandStrReg("Z+2", REG_ACC2),      "  2:");
+            GenAsm("", "std", OperandStrReg("Z+3", REG_ACC3),      "  2:");
+            return;
+        default:
+            Error(FATAL, "UnaryPtrPreInc to unknown sized object");
+            return;
+        }
+    }
+}
+
+
+// ##########################################################################
+// #  Function: UnaryPtrPreDec
+// #        <todo: task brief description>
+// #
+// #        <todo: task detailed description>
+// #
+// #  Parameters:
+// #        <todo: params >
+// #
+// #  Returns:
+// #        <todo: return Value>
+// #
+// #  See Also:
+// #
+// ##########################################################################
+static void UnaryPtrPreDec(TPExprNode pExpr) {                            // Pre increment the pointer's target
+    int iSize = CalcSizeOf(pExpr->pType);
+    ASSERT(iSize == SIZE_PTR_DEFAULT);
+    GenExpr(pExpr);                                                    // Calc decendant.
+
+    ASSERT(pExpr->pType->Usage == DecPtr);
+    TPDeclSpec pTarget = pExpr->pType->Use.DecPtr.pTarget;
+    
+    GenAsm("", "movw", OperandRegReg(30, REG_ACC0), "  1: de-ref pointer");     // even move
+
+    if (IsTypeQualifierConst(pTarget)) {
+        Error(ERRORX, "const data cannot be decremented.");
+        return;
+    }
+    else {
+        switch (CalcSizeOf(pTarget)) {
+        case 1:
+            GenAsm("", "ld",  OperandRegStr(REG_ACC0, "Z"),         "  1: data is in RAM");
+            GenAsm("", "dec", OperandReg(REG_ACC0),                 "  1: pre decrement 8");
+            GenAsm("", "st",  OperandStrReg("Z", REG_ACC0),         "  1:");
+            return;                                   
+        case 2:                                                
+#pragma message("** BUG *** UnaryPtrPreDec if the target is a pointer the increment size changes!!!!!")
+            GenAsm("", "ld",  OperandRegStr(REG_ACC0,  "Z"),        "  1: data is in RAM");
+            GenAsm("", "ldd", OperandRegStr(REG_ACC1, "Z+1"),       "  2: pre decrement 16");
+            GenAsm("", "sbiw",OperandRegImmediate(REG_ACC0, 1),     "  1:");
+            GenAsm("", "st",  OperandStrReg("Z",   REG_ACC0),       "  1:");
+            GenAsm("", "std", OperandStrReg("Z+1", REG_ACC1),       "  2:");
+            return;
+        case 4:
+            GenAsm("", "ld",  OperandRegStr(REG_ACC0, "Z"),         "  1: data is in RAM");
+            GenAsm("", "ldd", OperandRegStr(REG_ACC1, "Z+1"),       "  2: pre decrement 32");
+            GenAsm("", "ldd", OperandRegStr(REG_ACC2, "Z+2"),       "  2:");
+            GenAsm("", "ldd", OperandRegStr(REG_ACC3, "Z+3"),       "  2:");
+            GenAsm("", "subi",OperandRegImmediate(REG_ACC0, 0x01),  "  1:");
+            GenAsm("", "sbci",OperandRegImmediate(REG_ACC1, 0x00),  "  1:");
+            GenAsm("", "sbci",OperandRegImmediate(REG_ACC2, 0x00),  "  1:");
+            GenAsm("", "sbci",OperandRegImmediate(REG_ACC3, 0x00),  "  1:");
+            GenAsm("", "st",  OperandStrReg("Z",   REG_ACC0),       "  1:");
+            GenAsm("", "std", OperandStrReg("Z+1", REG_ACC1),       "  2:");
+            GenAsm("", "std", OperandStrReg("Z+2", REG_ACC2),       "  2:");
+            GenAsm("", "std", OperandStrReg("Z+3", REG_ACC3),       "  2:");
+            return;
+        default:
+            Error(FATAL, "UnaryPtrPreDec to unknown sized object");
+            return;
+        }
+    }
+}
+
+
+// ##########################################################################
+// #  Function: UnaryPostInc
+// #        <todo: task brief description>
+// #
+// #        <todo: task detailed description>
+// #
+// #  Parameters:
+// #        <todo: params >
+// #
+// #  Returns:
+// #        <todo: return Value>
+// #
+// #  See Also:
+// #
+// ##########################################################################
+static void UnaryPostInc(TPExprNode pExpr) {
+#pragma message("** BUG *** UnaryPostInc if the target is a pointer the increment size changes!!!!!")
+
+    if (pExpr->Usage == uVar) {
+        if (pExpr->Use.Var.iFrameOffset == GLOBAL_VAR) {
+            if ((pExpr->pType->Use.DecSpec.Qual & QualCONST) == QualCONST) {
+                Error(WARNINGX, "UnaryPostInc. We can't post incerment a variable in ROM!");
+                GenAsm(";", "!!!", "Post increment something in ROM", "   : No code generated. It wouldn't work!");
+                return;
+            }
+            else {
+                switch (CalcSizeOf(pExpr->pType)) {
+                case 1:     AVR_LoadRam8PostInc(REG_ACC, pExpr->Use.Var.pszIdentifier);  return;
+                case 2:     AVR_LoadRam16PostInc(REG_ACC, pExpr->Use.Var.pszIdentifier); return;
+                case 4:     AVR_LoadRam32PostInc(REG_ACC, pExpr->Use.Var.pszIdentifier); return;
+                default:    Error(FATAL, "UnaryPostInc Ram: Size?\n");
+                    return;
+                }
+            }
+        }
+        else {
+            switch (CalcSizeOf(pExpr->pType)) {
+            case 1:     AVR_LoadFrame8PostInc(REG_ACC, pExpr->Use.Var.iFrameOffset, pExpr->Use.Var.pszIdentifier);  return;
+            case 2:     AVR_LoadFrame16PostInc(REG_ACC, pExpr->Use.Var.iFrameOffset, pExpr->Use.Var.pszIdentifier); return;
+            case 4:     AVR_LoadFrame32PostInc(REG_ACC, pExpr->Use.Var.iFrameOffset, pExpr->Use.Var.pszIdentifier); return;
+            default:    Error(FATAL, "UnaryPostInc frame: Size?\n");
+                return;
+            }
+        }
+    }
+    else if ((pExpr->Usage == uUnary) && (pExpr->Use.Unary.Op == unPtr)) {
+        UnaryPtrPostInc(pExpr->Use.Unary.pOperand);
+        return;
+    }
+    else {
+        Error(FATAL, "UnaryPostInc. This one's a bit tricky. I give up.");
+        return;
+    }
+}
+
+// ##########################################################################
+// #  Function: UnaryPreInc
+// #        <todo: task brief description>
+// #
+// #        <todo: task detailed description>
+// #
+// #  Parameters:
+// #        <todo: params >
+// #
+// #  Returns:
+// #        <todo: return Value>
+// #
+// #  See Also:
+// #
+// ##########################################################################
+static void UnaryPreInc(TPExprNode pExpr) {
+#pragma message("** BUG *** UnaryPreInc if the target is a pointer the increment size changes!!!!!")
+
+    if (pExpr->Usage == uVar) {
+        if (pExpr->Use.Var.iFrameOffset == GLOBAL_VAR) {
+            if ((pExpr->pType->Use.DecSpec.Qual & QualCONST) == QualCONST) {
+                Error(WARNINGX, "UnaryPreInc. We can't post incerment a variable in ROM!");
+                GenAsm(";", "!!!", "Pre increment something in ROM", "   : No code generated. It wouldn't work!");
+                return;
+            }
+            else {
+                switch (CalcSizeOf(pExpr->pType)) {
+                case 1:     AVR_LoadRam8PreInc(REG_ACC, pExpr->Use.Var.pszIdentifier);  return;
+                case 2:     AVR_LoadRam16PreInc(REG_ACC, pExpr->Use.Var.pszIdentifier); return;
+                case 4:     AVR_LoadRam32PreInc(REG_ACC, pExpr->Use.Var.pszIdentifier); return;
+                default:    Error(FATAL, "UnaryPreInc Ram: Size?\n");
+                    return;
+                }
+            }
+        }
+        else {
+            switch (CalcSizeOf(pExpr->pType)) {
+            case 1:     AVR_LoadFrame8PreInc(REG_ACC, pExpr->Use.Var.iFrameOffset, pExpr->Use.Var.pszIdentifier);  return;
+            case 2:     AVR_LoadFrame16PreInc(REG_ACC, pExpr->Use.Var.iFrameOffset, pExpr->Use.Var.pszIdentifier); return;
+            case 4:     AVR_LoadFrame32PreInc(REG_ACC, pExpr->Use.Var.iFrameOffset, pExpr->Use.Var.pszIdentifier); return;
+            default:    Error(FATAL, "UnaryPreInc frame: Size?\n");
+                return;
+            }
+        }
+    }
+    else if ((pExpr->Usage == uUnary) && (pExpr->Use.Unary.Op == unPtr)) {
+        UnaryPtrPreInc(pExpr->Use.Unary.pOperand);
+        return;
+    }
+    else {
+        Error(FATAL, "UnaryPreInc. This one's a bit tricky. I give up.");
+        return;
+    }
+}
+
+// ##########################################################################
+// #  Function: UnaryPostDec
+// #        <todo: task brief description>
+// #
+// #        <todo: task detailed description>
+// #
+// #  Parameters:
+// #        <todo: params >
+// #
+// #  Returns:
+// #        <todo: return Value>
+// #
+// #  See Also:
+// #
+// ##########################################################################
+static void UnaryPostDec(TPExprNode pExpr) {
+#pragma message("** BUG *** UnaryPostDec if the target is a pointer the increment size changes!!!!!")
+
+    if (pExpr->Usage == uVar) {
+        if (pExpr->Use.Var.iFrameOffset == GLOBAL_VAR) {
+            if ((pExpr->pType->Use.DecSpec.Qual & QualCONST) == QualCONST) {
+                Error(WARNINGX, "UnaryPostDec. We can't post incerment a variable in ROM!");
+                GenAsm(";", "!!!", "Post decrement something in ROM", "   : No code generated. It wouldn't work!");
+                return;
+            }
+            else {
+                switch (CalcSizeOf(pExpr->pType)) {
+                case 1:     AVR_LoadRam8PostDec(REG_ACC, pExpr->Use.Var.pszIdentifier);  return;
+                case 2:     AVR_LoadRam16PostDec(REG_ACC, pExpr->Use.Var.pszIdentifier); return;
+                case 4:     AVR_LoadRam32PostDec(REG_ACC, pExpr->Use.Var.pszIdentifier); return;
+                default:    Error(FATAL, "UnaryPostDec Ram: Size?\n");
+                    return;
+                }
+            }
+
+        }
+        else {
+            switch (CalcSizeOf(pExpr->pType)) {
+            case 1:     AVR_LoadFrame8PostDec(REG_ACC, pExpr->Use.Var.iFrameOffset, pExpr->Use.Var.pszIdentifier);   return;
+            case 2:     AVR_LoadFrame16PostDec(REG_ACC, pExpr->Use.Var.iFrameOffset, pExpr->Use.Var.pszIdentifier);  return;
+            case 4:     AVR_LoadFrame32PostDec(REG_ACC, pExpr->Use.Var.iFrameOffset, pExpr->Use.Var.pszIdentifier);  return;
+            default:    Error(FATAL, "UnaryPostDec frame: Size?\n");
+                return;
+            }
+        }
+    }
+    else if ((pExpr->Usage == uUnary) && (pExpr->Use.Unary.Op == unPtr)) {
+        UnaryPtrPostDec(pExpr->Use.Unary.pOperand);
+        return;
+    }
+    else {
+        Error(FATAL, "UnaryPostDec. This one's a bit tricky. I give up.");
+        return;
+    }
+}
+
+// ##########################################################################
+// #  Function: UnaryPreDec
+// #        <todo: task brief description>
+// #
+// #        <todo: task detailed description>
+// #
+// #  Parameters:
+// #        <todo: params >
+// #
+// #  Returns:
+// #        <todo: return Value>
+// #
+// #  See Also:
+// #
+// ##########################################################################
+static void UnaryPreDec(TPExprNode pExpr) {
+#pragma message("** BUG *** UnaryPreDec if the target is a pointer the increment size changes!!!!!")
+
+    if (pExpr->Usage == uVar) {
+        if (pExpr->Use.Var.iFrameOffset == GLOBAL_VAR) {
+            if ((pExpr->pType->Use.DecSpec.Qual & QualCONST) == QualCONST) {
+                Error(WARNINGX, "UnaryPostDec. We can't post incerment a variable in ROM!");
+                GenAsm(";", "!!!", "Pre decrement something in ROM", "   : No code generated. It wouldn't work!");
+                return;
+            }
+            else {
+                switch (CalcSizeOf(pExpr->pType)) {
+                case 1:     AVR_LoadRam8PreDec(REG_ACC, pExpr->Use.Var.pszIdentifier);  return;
+                case 2:     AVR_LoadRam16PreDec(REG_ACC, pExpr->Use.Var.pszIdentifier); return;
+                case 4:     AVR_LoadRam32PreDec(REG_ACC, pExpr->Use.Var.pszIdentifier); return;
+                default:    Error(FATAL, "UnaryPreDec Ram: Size?\n");
+                    return;
+                }
+            }
+
+        }
+        else {
+            switch (CalcSizeOf(pExpr->pType)) {
+            case 1:     AVR_LoadFrame8PreDec(REG_ACC, pExpr->Use.Var.iFrameOffset, pExpr->Use.Var.pszIdentifier);  return;
+            case 2:     AVR_LoadFrame16PreDec(REG_ACC, pExpr->Use.Var.iFrameOffset, pExpr->Use.Var.pszIdentifier); return;
+            case 4:     AVR_LoadFrame32PreDec(REG_ACC, pExpr->Use.Var.iFrameOffset, pExpr->Use.Var.pszIdentifier); return;
+            default:    Error(FATAL, "UnaryPreDec frame: Size?\n");
+                return;
+            }
+        }
+    }
+    else if ((pExpr->Usage == uUnary) && (pExpr->Use.Unary.Op == unPtr)) {
+        UnaryPtrPreDec(pExpr->Use.Unary.pOperand);
+        return;
+    }
+    else {
+        Error(FATAL, "UnaryPreDec. This one's a bit tricky. I give up.");
+        return;
+    }
+}
+
+
+
+// ##########################################################################
+// #  Function: UnaryAddr
+// #        <todo: task brief description>
+// #
+// #        <todo: task detailed description>
+// #
+// #  Parameters:
+// #        <todo: params >
+// #
+// #  Returns:
+// #        <todo: return Value>
+// #
+// #  See Also:
+// #
+// ##########################################################################
+static void UnaryAddr(TPExprNode pExpr) {
+    if (pExpr->Usage == uVar) {                                                             // Simple case is addr of a variable name.
+        if (pExpr->Use.Var.iFrameOffset == GLOBAL_VAR) {                                    //      Global.
+            GenAsm("", "ldi", OperandRegVar(REG_ACC0, pExpr->Use.Var.pszIdentifier), CommentString(1, "Z = ", pExpr->Use.Var.pszIdentifier));
+            GenAsm("", "ldi", OperandRegVar(REG_ACC1, pExpr->Use.Var.pszIdentifier), "  1:");
+        }
+        else {                                                                              //      Frame var.
+            GenAsm("", "movw", OperandRegReg(REG_TMP0, 28),                          CommentString(1, "Z = ", pExpr->Use.Var.pszIdentifier));
+            GenAsm("", "adiw", OperandRegImmediate(REG_TMP0, iGlbLocalSize + pExpr->Use.Var.iFrameOffset), "  2:");
+            GenAsm("", "movw", OperandRegReg(REG_ACC0, REG_TMP0),                    "  1:");
+        }
+    }
+    else {
+        Error(FATAL, "UnaryAddr complicated use not implemented");
+    }
+}
+
+
+// ##########################################################################
+// #  Function: GenExprUnary
+// #        <todo: task brief description>
+// #
+// #        <todo: task detailed description>
+// #
+// #  Parameters:
+// #        <todo: params >
+// #
+// #  Returns:
+// #        <todo: return Value>
+// #
+// #  See Also:
+// #
+// ##########################################################################
+void GenExprUnary(TPExprNode pExpr) {
+    ASSERT(pExpr->Usage == uUnary);
+    TPExprNode pN = pExpr->Use.Unary.pOperand;
+
+    switch (pExpr->Use.Unary.Op) {                                                                      // Do the arithmetic. 
+    case unMinus:   UnaryMinus(pN);   return;
+    case unPlus:    UnaryPlus(pN);    return;
+    case unNeg:     UnaryNeg(pN);     return;
+    case unPostInc: UnaryPostInc(pN); return;
+    case unPreInc:  UnaryPreInc(pN);  return;
+    case unPostDec: UnaryPostDec(pN); return;
+    case unPreDec:  UnaryPreDec(pN);  return;
+  //case unSizeOf:  UnarySizeOf(pN);  return; // not used. optimized away into a constant.
+    case unAddr:    UnaryAddr(pN);    return;
+    case unPtr:     UnaryPtr(pN);     return;
+    case unNot:     UnaryNot(pN);     return;
+
+    default:                                                                                            //
+        Error(FATAL, "GenExprUnary: Unrecognized Op Unary %d\n", pExpr->Use.Unary.Op);                  //
+        return;                                                                                    //
+    }                                                                                                   //
+}
+
+// ##########################################################################
+// #  Function: GenExprUnaryConditional
+// #        <todo: task brief description>
+// #
+// #        <todo: task detailed description>
+// #
+// #  Parameters:
+// #        <todo: params >
+// #
+// #  Returns:
+// #        <todo: return Value>
+// #
+// #  See Also:
+// #
+// ##########################################################################
+void GenExprUnaryConditional(TPExprNode pExpr, LPSTR pszTrue, LPSTR pszFalse) {
+    ASSERT(pExpr->Usage == uUnary);
+    ASSERT(IsBoolean(pExpr->pType));
+
+    TPExprNode pN = pExpr->Use.Unary.pOperand;
+
+
+    if (pExpr->Use.Unary.Op == unNot) {     // Do the arithmetic. 
+        UnaryNotConditional(pN, pszTrue, pszFalse);
+    }
+    else {
+        Error(FATAL, "GenExprUnaryConditional: Unrecognized Op Unary %d\n", pExpr->Use.Unary.Op);   //
+    }
+}
+
+
+
+// ##########################################################################
+// #  Function: GenExprBinary
+// #        <todo: task brief description>
+// #
+// #        <todo: task detailed description>
+// #
+// #  Parameters:
+// #        <todo: params >
+// #
+// #  Returns:
+// #        <todo: return Value>
+// #
+// #  See Also:
+// #
+// ##########################################################################
+void GenExprBinary(TPExprNode pExpr) {
+    ASSERT(pExpr->Usage == uBinary);
+
+    switch (pExpr->Use.Binary.Op) {                                                             // Do the arithmetic. 
+    case binAdd:  GenAdd(pExpr);            return;                                             //  
+    case binSub:  GenSub(pExpr);            return;                                             //
+    case binMul:  GenMul(pExpr);            return;                                             //
+    case binDiv:  GenDiv(pExpr);            return;                                             //
+    case binMod:  GenMod(pExpr);            return;                                             //
+    case binAnd:  GenAnd(pExpr);            return;                                             //
+    case binOr:   GenOr(pExpr);             return;                                             //
+    case binXor:  GenXor(pExpr);            return;                                             //
+    case binCEQ:  GenCompEQ(pExpr);         return;                                             //
+    case binCNE:  GenCompNE(pExpr);         return;                                             //
+    case binCLT:  GenCompLT(pExpr);         return;                                             //
+    case binCLE:  GenCompLE(pExpr);         return;                                             //
+    case binCGT:  GenCompGT(pExpr);         return;                                             //
+    case binCGE:  GenCompGE(pExpr);         return;                                             //
+    case binLAnd: GenCompLogicalAnd(pExpr); return;                                             //
+    case binLOr:  GenCompLogicalOr(pExpr);  return;                                             //
+    case binShr:  GenShiftR(pExpr);         return;                                             //
+    case binShl:  GenShiftL(pExpr);         return;                                             //
+    default:                                                                                    //
+        Error(FATAL, "GenExprBinary: Un recognized Op Binary %d\n", pExpr->Use.Binary.Op);      //
+    }
+}
+
+
+
+// ##########################################################################
+// #  Function: GenExprBinaryConditional
+// #        <todo: task brief description>
+// #
+// #        <todo: task detailed description>
+// #
+// #  Parameters:
+// #        <todo: params >
+// #
+// #  Returns:
+// #        <todo: return Value>
+// #
+// #  See Also:
+// #
+// ##########################################################################
+void GenExprBinaryConditional(TPExprNode pExpr, LPSTR pszTrue, LPSTR pszFalse) {
+    ASSERT(pExpr->Usage == uBinary);
+    ASSERT(IsBoolean(pExpr->pType));
+
+    switch (pExpr->Use.Binary.Op) {                                                 // Do the arithmetic. 
+      case binAdd:  
+      case binSub:
+      case binMul:
+      case binDiv:
+      case binMod:
+      case binAnd:
+      case binOr: 
+      case binXor:
+           Error(FATAL, "GenExprBinaryConditional: Unrecognized Op Binary %d\n", pExpr->Use.Binary.Op);
+           return;
+
+      case binCEQ:  GenCompEQConditional(pExpr, pszTrue, pszFalse);         return; //
+      case binCNE:  GenCompNEConditional(pExpr, pszTrue, pszFalse);         return; //
+      case binCLT:  GenCompLTConditional(pExpr, pszTrue, pszFalse);         return; //
+      case binCLE:  GenCompLEConditional(pExpr, pszTrue, pszFalse);         return; //
+      case binCGT:  GenCompGTConditional(pExpr, pszTrue, pszFalse);         return; //
+      case binCGE:  GenCompGEConditional(pExpr, pszTrue, pszFalse);         return; //
+      case binLAnd: GenCompLogicalAndConditional(pExpr, pszTrue, pszFalse); return; //
+      case binLOr:  GenCompLogicalOrConditional(pExpr, pszTrue, pszFalse);  return; //
+
+      case binShr:
+      case binShl:
+      default:
+           Error(FATAL, "GenExprBinaryConditional: Unrecognized Op Binary %d\n", pExpr->Use.Binary.Op);
+    }
+}
+
+// ##########################################################################
+// #  Function: GenExprAssign
+// #        <todo: task brief description>
+// #
+// #        <todo: task detailed description>
+// #
+// #  Parameters:
+// #        <todo: params >
+// #
+// #  Returns:
+// #        <todo: return Value>
+// #
+// #  See Also:
+// #
+// ##########################################################################
+void GenExprAssign(TPExprNode pExpr) {
+    TPExprNode pLval = pExpr->Use.Assign.pLval;
+    TPExprNode pRval = pExpr->Use.Assign.pRval;
+#pragma message("    GenExprAssign: var = const is a common special case.")
+    int iTargetSize = CalcSizeOf(pLval->pType);
+    int iSourceSize = CalcSizeOf(pRval->pType);
+    
+    ASSERT(iTargetSize == iSourceSize);                              // Confirm sizes match. 
+
+    GenExpr(pRval);                                                                                                             // First Calculate the RVAL. 
+
+    // TOS = the new value to store
+    if (IsTypeQualifierConst(pExpr->pType)) {                                                                                   // Trouble if we want to assign to a constant!
+        GenAsm(";", "!!!", "write to ROM", "   : Code ommited here. The prescription is silly");                                //
+        return;                                                                                                                 //
+    }                                                                                                                           //
+
+    if (pLval->Usage == uVar) {                                                                                                 // Store into a variable ?
+        if (pLval->Use.Var.iFrameOffset == GLOBAL_VAR) {                                                                        //      Golbal ?                                
+            switch (CalcSizeOf(pLval->pType)) {                                                                                 //
+            case 1:     AVR_StoreRam8(pLval->Use.Var.pszIdentifier, REG_ACC);  return;                                          //
+            case 2:     AVR_StoreRam16(pLval->Use.Var.pszIdentifier, REG_ACC); return;                                          //
+            case 4:     AVR_StoreRam32(pLval->Use.Var.pszIdentifier, REG_ACC); return;                                          //
+            default:    Error(FATAL, "GenExprAssign Ram: Size?\n");            return;                                          //
+            }                                                                                                                   //
+        }                                                                                                                       //
+        else {                                                                                                                  //      Frame ?
+            switch (CalcSizeOf(pExpr->pType)) {                                                                                 //
+            case 1:     AVR_StoreFrame8(pLval->Use.Var.iFrameOffset,  REG_ACC, pLval->Use.Var.pszIdentifier); return;           //
+            case 2:     AVR_StoreFrame16(pLval->Use.Var.iFrameOffset, REG_ACC, pLval->Use.Var.pszIdentifier); return;           //
+            case 4:     AVR_StoreFrame32(pLval->Use.Var.iFrameOffset, REG_ACC, pLval->Use.Var.pszIdentifier); return;           //
+            default:    Error(FATAL, "GenExprAssign frame: Size?\n");                                         return;           //
+            }
+        }
+    }
+    else if (pLval->Usage == uUnary && pLval->Use.Unary.Op == unPtr) {                                                          // it's at the end of a dereferenced pointer.
+
+        AVR_Push(REG_ACC, iTargetSize);
+        GenExpr(pLval->Use.Unary.pOperand);                                             // Calc decendant of the ptr. Expect an address as the result
+        GenAsm("", "movw", OperandRegReg(30, REG_ACC0), "  1: pointer to the storage");       // even move
+        AVR_Pop(REG_ACC, iTargetSize);
+
+        switch (iTargetSize) {
+        case 1:
+            GenAsm("", "st", OperandStrReg("Z", REG_ACC0),        "  1:");
+            return;
+        case 2:
+            GenAsm("", "st",  OperandStrReg("Z",   REG_ACC0),     "  1:");
+            GenAsm("", "std", OperandStrReg("Z+1", REG_ACC1),     "  2:");
+            return;
+        case 4:
+            GenAsm("", "st", OperandStrReg("Z",    REG_ACC0),     "  1:");
+            GenAsm("", "std", OperandStrReg("Z+1", REG_ACC1),     "  2:");
+            GenAsm("", "std", OperandStrReg("Z+2", REG_ACC2),     "  2:");
+            GenAsm("", "std", OperandStrReg("Z+3", REG_ACC3),     "  2:");
+            return;
+        default:
+            Error(FATAL, "UnaryPtr to unknown sized object");
+            return;
+        }
+    }
+    else {
+        Error(FATAL, "GenExprAssign: Assign to tricky destination.");
+        return;
+    }
+}
+
+// ##########################################################################
+// #  Function: GenExpr
+// #        <todo: task brief description>
+// #
+// #        <todo: task detailed description>
+// #
+// #  Parameters:
+// #        <todo: params >
+// #
+// #  Returns:
+// #        <todo: return Value>
+// #
+// #  See Also:
+// #
+// ##########################################################################
+static void GenExpr(TPExprNode pExpr) {
+    if (!pExpr) {
+        printf("..Null\n");
+        Error(FATAL, "GenExpr() - NULL\n");
+        return;
+    }
+
+    switch (pExpr->Usage) {
+    case    uConst:   GenExprConst(REG_ACC, pExpr); return;
+    case    uVar:     GenExprVar(REG_ACC, pExpr); return;
+    case    uUnary:   GenExprUnary(pExpr);  return;
+    case    uBinary:  GenExprBinary(pExpr); return;
+    case    uTernary: Error(FATAL, "GenExpr() - uTernary needs implementing\n"); return;
+    case    uDot:     Error(FATAL, "GenExpr() - uDot needs implementing\n"); return;
+    case    uArrow:   Error(FATAL, "GenExpr() - uArrow needs implementing\n"); return;
+    case    uArray:   // not expecting to be here. Array access was re-parsed to make it a collection of & and * operators.
+                      Error(FATAL, "GenExpr() - uArray needs implementing\n"); return;
+    case    uFunc:    Error(FATAL, "GenExpr() - uFunc needs implementing\n"); return;
+    case    uCast:    GenExprCast(pExpr);   return;
+    case    uAssign:  GenExprAssign(pExpr); return;
+    default:          Error(FATAL, "GenExpr() - [%d]\n", pExpr->Usage); return;
+    }
+    return;
+
+}
+
+// ##########################################################################
+// #  Function: GenExpression
+// #        Evaluate an expression leaving the result in the Accumulator register.
+// #
+// #  Parameters:
+// #        <todo: params >
+// #
+// #  Returns:
+// #        <todo: return Value>
+// #
+// #  See Also:
+// #
+// ##########################################################################
+void    GenExpression(FILE *hFileOut, TPExprNode pExpr) {
+
+    hGlbOut = hFileOut;
+
+    ConsolePrintf(CON_YELLOW_BRIGHT, "Expression generation.\n");
+    GenExpressionPrettyPrint(0, pExpr);
+    ConsolePrintf(CON_YELLOW_BRIGHT, "\n");
+
+    GenExpr(pExpr);
+
+}
+
+
+
+// ##########################################################################
+// #  Function: GenExprConditional
+// #        <todo: task brief description>
+// #
+// #        <todo: task detailed description>
+// #
+// #  Parameters:
+// #        <todo: params >
+// #
+// #  Returns:
+// #        <todo: return Value>
+// #
+// #  See Also:
+// #
+// ##########################################################################
+static void GenExprConditional(TPExprNode pExpr, LPSTR pszTrue, LPSTR pszFalse) {
+    if (!pExpr) {
+        printf("..Null\n");
+        Error(FATAL, "GenExprCond() - NULL\n");
+        return;
+    }
+
+    ASSERT(IsBoolean(pExpr->pType));
+
+    switch (pExpr->Usage) {
+    case    uConst:   //GenExprConst(REG_ACC, pExpr); return;
+    case    uVar:     //GenExprVar(REG_ACC, pExpr); return;
+    case    uUnary:   GenExprUnaryConditional(pExpr, pszTrue, pszFalse); return; 
+    case    uBinary:  GenExprBinaryConditional(pExpr, pszTrue, pszFalse); return;
+    case    uTernary: //Error(FATAL, "GenExprCond() - uTernary needs implementing\n"); return;
+    case    uDot:     //Error(FATAL, "GenExprCond() - uDot needs implementing\n"); return;
+    case    uArrow:   //Error(FATAL, "GenExprCond() - uArrow needs implementing\n"); return;
+    case    uArray:   // not expecting to be here. Array access was re-parsed to make it a collection of & and * operators.
+                      //Error(FATAL, "GenExprCond() - uArray needs implementing\n"); return;
+    case    uFunc:    //Error(FATAL, "GenExprCond() - uFunc needs implementing\n"); return;
+                      Error(FATAL, "GenExprCond() - [%d]\n", pExpr->Usage); return;
+    case    uCast:    GenExprCastConditional(pExpr, pszTrue, pszFalse);   return;
+    case    uAssign:  //GenExprAssign(pExpr); return;
+    default:          Error(FATAL, "GenExprCond() - [%d]\n", pExpr->Usage); return;
+    }
+    return;
+
+}
+
+// ##########################################################################
+// #  Function: GenExpressionConditional
+// #        As per <GenExpression> except the result is a jump to one or two labels depending on the result being <TRU> or <FALSE>.
+// #        The input expression must be of type BOOL.
+// #
+// #  Parameters:
+// #        <todo: params >
+// #
+// #  Returns:
+// #        <todo: return Value>
+// #
+// #  See Also:
+// #
+// ##########################################################################
+
+void    GenExpressionConditional(FILE *hFileOut, TPExprNode pExpr, LPSTR pzsTrue, LPSTR pszFalse) {
+    hGlbOut = hFileOut;
+
+    ConsolePrintf(CON_YELLOW_BRIGHT, "Conditional Expression generation.\n");
+    GenExpressionPrettyPrint(0, pExpr);
+    ConsolePrintf(CON_YELLOW_BRIGHT, "\n");
+
+    GenExprConditional(pExpr, pzsTrue, pszFalse);
+}
+
+
+
+
+/* eof */
+

@@ -1,0 +1,59 @@
+
+int w,x,y,z;    
+
+// void adds(void) {
+//  
+//     w+x+y+z;
+//     ((w+x)+y)+z;
+//     w+(x+(y+z));
+// }
+// 
+// void subs(void) {
+//  
+//     w-x-y-z;
+//     ((w-x)-y)-z;
+//     w-(x-(y-z));
+// }
+typedef char TbaA[7];
+
+    char  *pC;
+    short *pS;
+    long  *pL;
+    TbaA  *pA;
+
+void main(void) {
+    
+//    *pC++ = 1;
+//    *pS++ = 1;
+//    pL++;
+//    pA++;
+//    
+//    *pC-- = 1;
+//    *pS-- = 1;
+//    pL--;
+//    pA--;
+//
+//    *++pC = 1;
+//    *++pS = 1;
+//    ++pL;
+//    ++pA;
+//    
+//    *--pC = 1;
+//    *--pS = 1;
+//    --pL;
+//    --pA;
+
+    char  * *ppbX;
+    short * *ppsX;
+    short * *pplX;
+    TbaA  * *ppA;  
+    
+     (*ppsX)++;
+    
+}
+
+
+
+
+
+

@@ -1,0 +1,4 @@
+
+void InitializerProcess(TPDeclSpec pDecl);
+ 
+/* eof */

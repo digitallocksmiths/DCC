@@ -1,0 +1,54 @@
+
+ void Comparison(void) {
+     char c;
+     
+      (short)1 == (unsigned)1;                   // 1 (int)
+      1 == -1;                                   // 0 (int)
+      -1 == 1;                                   // 0 (int)
+      (c*0+1) == (c*0+1);                        // 1 (int)
+      (c*0+1) == (c*0-1);                        // 0 (int)
+      (c*0-1) == (c*0+1);                        // 0 (int)
+      (unsigned)(c*0+1) == (int)(c*0-1);         // 0 (int)
+  
+      (short)1 != (unsigned)1;                   // 0 (int)
+      1 != -1;                                   // 1 (int)
+      -1 != 1;                                   // 1 (int)
+      (c*0+1) != (c*0+1);                        // 0 (int)
+      (c*0+1) != (c*0-1);                        // 1 (int)
+      (c*0-1) != (c*0+1);                        // 1 (int)
+      (unsigned)(c*0+1) != (int)(c*0-1);         // 1 (int)
+  
+      (short)1 < (unsigned)1;                    // 0 (int)
+      1 < -1;                                    // 0 (int)
+      -1 < 1;                                    // 1 (int)
+      (c*0+1) < (c*0+1);                         // 0 (int)
+      (c*0+1) < (c*0-1);                         // 0 (int)
+      (c*0-1) < (c*0+1);                         // 1 (int)
+      (unsigned)(c*0+1) < (int)(c*0-1);          // 0 (int)
+  
+      (short)1 >= (unsigned)1;                   // 1 (int)
+      1 >= -1;                                   // 1 (int)
+      -1 >= 1;                                   // 0 (int)
+      (c*0+1) >= (c*0+1);                        // 1 (int)
+      (c*0+1) >= (c*0-1);                        // 1 (int)
+      (c*0-1) >= (c*0+1);                        // 0 (int)
+      (unsigned)(c*0+1) >= (int)(c*0-1);         // 1 (int)
+  
+      (short)1 > (unsigned)1;                    // 0 (int)
+      1 > -1;                                    // 1 (int)
+      -1 > 1;                                    // 0 (int)
+      (c*0+1) > (c*0+1);                         // 0 (int)
+      (c*0+1) > (c*0-1);                         // 1 (int)
+      (c*0-1) > (c*0+1);                         // 0 (int)
+      (unsigned)(c*0+1) > (int)(c*0-1);          // 1 (int)
+    
+      (short)1 <= (unsigned)1;                   // 1 (int)
+      1 <= -1;                                   // 0 (int)
+      -1 <= 1;                                   // 1 (int)
+      (c*0+1) <= (c*0+1);                        // 1 (int)
+      (c*0+1) <= (c*0-1);                        // 0 (int)
+      (c*0-1) <= (c*0+1);                        // 1 (int)
+      (unsigned)(c*0+1) <= (int)(c*0-1);         // 0 (int)
+      c;                                         // type unchanged/still char
+ 
+ }

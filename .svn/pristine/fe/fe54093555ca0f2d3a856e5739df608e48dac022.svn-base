@@ -1,0 +1,24 @@
+// # $URL$
+// # $Revision$
+
+
+#ifndef __SKC_GENDATA_H__
+#define __SKC_GENDATA_H__
+
+#ifdef DEBUG_INCLUDE_FILES 
+#pragma message("     including " __FILE__)
+#endif // DEBUG_INCLUDE_FILES
+
+
+
+//============================================================================================
+// Public functions
+
+void    GenConst(FILE *hOut, TPDeclSpec pDecl);
+void    GenData(FILE *hOut, TPDeclSpec pDecl);
+void    GenBss(FILE *hOut, TPDeclSpec pDecl);
+
+
+#endif // __SKC_GENDATA_H__
+
+/* eof */

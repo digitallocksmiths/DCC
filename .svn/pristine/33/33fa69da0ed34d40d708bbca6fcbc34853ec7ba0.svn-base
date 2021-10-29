@@ -1,0 +1,55 @@
+
+typedef unsigned char  u8, *pvu8;
+typedef unsigned short u16;
+
+u8 HalRam[64];
+
+void foo(void) {
+    
+    int a;
+    int *pa;
+    
+      // a=1;
+      // _ioreg(0x1B, "PORTA") = 2;
+      
+      // a = a+1;
+      // a += 1;
+      // a++;
+      // ++a;
+      
+      
+      // a = a & 0;
+      // a = a & 0xFFFF;
+      // a &= 0x0;
+      // a &= 0xFFFF;
+      
+//    a = _ioreg(0x1B, "PORTA");
+//    _ioreg(0x1B, "PORTA") = a+1;
+//    
+//    _ioreg(0x1B, "PORTA") |= 16;
+//    _ioreg(0x1B, "PORTA") |= 42;
+//    _ioreg(0x1B, "PORTA") |= a;
+//    
+//    _ioreg(0x1B, "PORTA") &= ~16;
+//    _ioreg(0x1B, "PORTA") &= 42;
+//    _ioreg(0x1B, "PORTA") &= a;
+//    
+//    a = a+3;
+//    a+=4;
+//    
+//    *pa = *pa+5;
+//    *pa += 6;
+//    
+//    a = a-7;
+//    a-=8;
+    
+//    a = a ^ 9;
+//    a ^= 9;
+//    a ^= 0;
+//    a ^= 0xff;
+//    a ^= 0xffff;
+//    a ^= 0x1ffff;
+    
+    (pvu8)(&(&HalRam)[1])-(pvu8)0x20;
+    
+}

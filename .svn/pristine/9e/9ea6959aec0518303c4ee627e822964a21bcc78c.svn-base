@@ -1,0 +1,26 @@
+// # $URL$
+// # $Revision$
+
+
+#ifndef __SKC_GEN_STATEMENTS_H__
+#define __SKC_GEN_STATEMENTS_H__
+
+#ifdef DEBUG_INCLUDE_FILES 
+#pragma message("     including " __FILE__)
+#endif // DEBUG_INCLUDE_FILES
+
+#define EXP_REG_BASE    4
+
+//============================================================================================
+// Public functions
+
+#ifdef _DEBUG
+void        GenStatementPrettyPrint(int iDepth, TPStatement pStat, BOOL fNext);
+#endif  // _DEBUG
+
+void        GenText(FILE *hOut, TPDeclSpec pDeclList);
+
+
+#endif // __SKC_GEN_STATEMENTS_H__
+
+/* eof */

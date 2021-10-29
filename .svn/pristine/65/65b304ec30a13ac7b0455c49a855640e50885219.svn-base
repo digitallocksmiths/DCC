@@ -1,0 +1,11 @@
+
+extern  DWORD ErrorCount;
+extern  DWORD WarningCount;
+
+void    Error0(LPSTR s1, LPSTR s2);
+void    Error1(LPSTR s1, LPSTR s2);
+void    Warning0(LPSTR s1, LPSTR s2);
+void    Warning1(LPSTR s1, LPSTR s2);
+
+/* eof */
+

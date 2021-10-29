@@ -1,0 +1,35 @@
+// # $URL$
+// # $Revision$
+
+
+#ifndef __SKC_GEN_EXPRESSIONS_H__
+#define __SKC_GEN_EXPRESSIONS_H__
+
+#ifdef DEBUG_INCLUDE_FILES 
+#pragma message("     including " __FILE__)
+#endif // DEBUG_INCLUDE_FILES
+
+
+//============================================================================================
+// Public functions
+
+#ifdef _DEBUG
+void    GenExpressionPrettyPrint(int iDepth, TPExprNode n);
+#endif // _DEBUG
+
+
+// protected
+void    _GenExpr(int iReg, TPExprNode pExpr);
+int     _GenCostOfCalculation(TPExprNode pExpr);
+
+
+
+//public
+void    GenExpression(TPExprNode pExpr);                                                    //
+void    GenExpressionConditional(TPExprNode pExpr, LPSTR pzsTrue, LPSTR pszFalse);          //
+
+
+#endif // __SKC_GEN_EXPRESSIONS_H__
+
+/* eof */
+

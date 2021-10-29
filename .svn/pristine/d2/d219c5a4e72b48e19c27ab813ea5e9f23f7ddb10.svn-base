@@ -1,0 +1,85 @@
+#define _AUTO 257
+#define _DOUBLE 258
+#define _INT 259
+#define _STRUCT 260
+#define _BREAK 261
+#define _ELSE 262
+#define _LONG 263
+#define _SWITCH 264
+#define _CASE 265
+#define _ENUM 266
+#define _REGISTER 267
+#define _TYPEDEF 268
+#define _CHAR 269
+#define _EXTERN 270
+#define _RETURN 271
+#define _UNION 272
+#define _CONST 273
+#define _FLOAT 274
+#define _SHORT 275
+#define _UNSIGNED 276
+#define _CONTINUE 277
+#define _FOR 278
+#define _SIGNED 279
+#define _VOID 280
+#define _DEFAULT 281
+#define _GOTO 282
+#define _SIZEOF 283
+#define _VOLATILE 284
+#define _DO 285
+#define _IF 286
+#define _STATIC 287
+#define _WHILE 288
+#define _NEAR 289
+#define _FAR 290
+#define _NORETURN 291
+#define _IOREG 292
+#define IDENTIFIER 293
+#define STRINGliteral 294
+#define INTEGERconstant 295
+#define CHARACTERconstant 296
+#define FLOATINGconstant 297
+#define ENUMERATIONconstant 298
+#define TYPEDEFname 299
+#define ARROW 300
+#define INC 301
+#define DEC 302
+#define LS 303
+#define RS 304
+#define LE 305
+#define GE 306
+#define EQ 307
+#define NE 308
+#define ANDAND 309
+#define OROR 310
+#define ELLIPSIS 311
+#define MULTassign 312
+#define DIVassign 313
+#define MODassign 314
+#define PLUSassign 315
+#define MINUSassign 316
+#define LSassign 317
+#define RSassign 318
+#define ANDassign 319
+#define XORassign 320
+#define ORassign 321
+typedef union {
+    DWORD   Integer;         /* integral values*/
+    DOUBLE  Real;            /* Floating point*/
+    BOOL    Bool;            /* Boolean Stuff eg Struct or Union*/
+    struct  {
+            DOUBLE  pack;
+            DWORD   LineNo,LinePos,OldNo,OldPos;
+    } LineInfo;
+
+    LPSTR               Ident;              /* labels/strings/identifiers etc.*/
+    TPDeclSpec          pDecl;              /* Declarations*/
+    TPEnumSet           pEnumSet;           /**/
+    TPEnumElement       pEnumElement;       /**/
+    TPStructSet         pStructSet;         /**/
+/*  TIdExprAssign       nAssign;            // ebum for assignments.*/
+    TIdExprUnOp         nUnaryOp;           /* enum for unary operators.*/
+    TPStatement         pStatement;         /* program statements.*/
+    TPExprNode          pExpr;              /* arirmetic expressions.*/
+} YYSTYPE;
+extern YYSTYPE yylval;

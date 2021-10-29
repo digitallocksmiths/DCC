@@ -1,0 +1,24 @@
+
+char c1,c2;
+
+unsigned int main(char  bY, short sY, long lY) {
+ 
+    char c;
+    short s1,s2,s3;
+    
+//    c = c1 >= c2;
+//    c = c1 > c2;
+    
+    if (c1 == c2) {
+        s1=1;
+    }
+    
+    if (c1 == c2) {
+        s2=2;
+    }
+    else {
+        s2=3;
+    }
+   
+}
+

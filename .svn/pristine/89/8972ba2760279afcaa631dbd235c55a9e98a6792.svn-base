@@ -1,0 +1,98 @@
+
+typedef unsigned char  u8;
+typedef unsigned short u16;
+typedef unsigned long  u32;
+
+u16      aInvokeCounts[16];     
+u16 *    pA;
+    
+long lGlbVar;
+const long lGlbConst;
+u8         baGlbRamArray[10];
+const u8   baGlbRomArray[10];
+ 
+      u8  *       pGlbVar;
+const u16 *       pGlbConst1;
+      u16 * const pGlbConst2;
+const u16 * const pGlbConst3;
+
+void    fooReadTests(void) {
+    
+    long lLocalVar;
+    u8   baLocalArray[10];
+    
+    u8  *             pLocalVar;
+    const u16 *       pLocalConst1;
+    u16 * const       pLocalConst2;
+    const u16 * const pLocalConst3;
+
+    
+    lGlbVar++;
+    baGlbRamArray[2]++;
+    *pGlbVar++;
+    (*pGlbVar)++;
+
+    //lLocalVar++;
+    //baLocalArray[4]++;
+    //*pLocalVar++;
+    //(*pLocalVar)++;
+
+}
+
+void    fooWriteTests(void) {
+    
+    long lLocalVar;
+    u8   baLocalArray[10];
+    
+    u8  *             pLocalVar;
+    const u16 *       pLocalConst1;
+    u16 * const       pLocalConst2;
+    const u16 * const pLocalConst3;
+
+    
+        
+    // lGlbVar   = 1;
+    // lGlbConst = 255;
+    
+    // baGlbRamArray     = 2;
+    // *baGlbRamArray    = 3;
+    // baGlbRamArray[0]  = 4;
+    // baGlbRamArray[3]  = 5;
+    // baGlbRomArray     = 2;
+    // *baGlbRomArray    = 2;
+    // baGlbRomArray[4]  = 2;
+    
+    // pGlbVar       = 1;
+    // *pGlbVar      = 2;
+    // pGlbVar[2]    = 3;
+    // pGlbConst1    = 1;
+    // *pGlbConst1   = 2;
+    // pGlbConst1[1] = 3;
+    // pGlbConst2    = 4;
+    // *pGlbConst2   = 5;
+    // pGlbConst2[2] = 6;
+    // pGlbConst3    = 7;
+    // *pGlbConst3   = 8;
+    // pGlbConst3[3] = 9;
+
+    // lLocalVar        = 1;
+    // baLocalArray     = 2;
+    // *baLocalArray    = 3;
+    // baLocalArray[5]  = 4;
+    
+    // pLocalVar       = 5;
+    // pLocalConst1    = 6;
+    // pLocalConst2    = 7;
+    // pLocalConst3    = 8;
+
+    // *pLocalVar         =  9;
+    // *pLocalConst1      = 10;
+    // *pLocalConst2      = 11;
+    // *pLocalConst3      = 12;
+
+    // pLocalVar[2]     = 13;
+    // pLocalConst1[3]  = 14;
+    // pLocalConst2[4]  = 15;
+    // pLocalConst3[5]  = 16;
+}
+

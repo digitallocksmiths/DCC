@@ -1,0 +1,209 @@
+/* ****************** */
+/* Data Element Sizes */
+/* ****************** */
+
+#define    SIZE_VOID            0           // basic types
+#define    SIZE_CHAR            1
+#define    SIZE_INT             2
+#define    SIZE_SHORT           2
+#define    SIZE_LONG            4
+#define    SIZE_FLOAT           8
+#define    SIZE_DOUBLE         16
+#define    SIZE_LONGDOUBLE     32
+
+#define    SIZE_ENUM            SIZE_SHORT
+#define    SIZE_FUNC            SIZE_SHORT           // reference types
+#define    SIZE_PTR_DEFAULT     SIZE_SHORT
+#define    SIZE_PTR_CONST       SIZE_SHORT
+#define    SIZE_PTR_VOLATILE    SIZE_SHORT
+#define    SIZE_PTR_NEAR        SIZE_SHORT
+#define    SIZE_PTR_FAR         SIZE_SHORT
+
+/* *************** */
+/* Type structures */
+/* *************** */
+// forward ref from Expr.h
+typedef struct TagExprNode TExprNode;
+typedef TExprNode * TPExprNode;
+
+
+typedef enum { DecSpec, DecId, DecPtr, DecArray, DecFunc } TUsage;
+
+typedef struct TagDeclSpec TDeclSpec;
+typedef TDeclSpec * TPDeclSpec;
+struct TagDeclSpec {
+    TUsage          Usage;                  // indicate the relevant structure type in the following union
+    TPDeclSpec      pChain;                 // link to the next element in the list.
+    union {
+        struct  {
+            WORD    Class;                  // Base Type     !! Keep DecSpec first in union for initialization !! 
+            WORD    Type;
+            WORD    Qual;
+            LPVOID  pPtr;                   // pointer used for structures, enums, etc.
+        } DecSpec;
+        struct {
+            LPSTR       pszName;            // Identifier
+            LPSTR       pszInitializedStr;
+            TPExprNode  pInitializer;
+            TPDeclSpec  pTarget;
+            TPDeclSpec  pBrother;
+        } DecId;
+        struct {                            // Pointers           
+            TPDeclSpec  pTarget;
+            WORD        Qual;            
+        } DecPtr;
+        struct {                            // Arrays
+            DWORD       Size;
+            TPDeclSpec  pTarget;
+        } DecArray;
+        struct {                            // Function
+            LPVOID      pPList;
+            LPVOID      pIdList;
+            TPDeclSpec  pTarget;
+        } DecFunc;
+    } Use;
+ };
+
+/* ********** */
+/* Base Types */
+/* ********** */
+
+#define ClassAUTO       (1<<0)              //  0x01
+#define ClassREGISTER   (1<<1)              //  0x02
+#define ClassSTATIC     (1<<2)              //  0x04
+#define ClassEXTERN     (1<<3)              //  0x08
+#define ClassTYPEDEF    (1<<4)              //  0x10
+
+#define TypeVOID        (1<<0)              //  0x0001
+#define TypeCHAR        (1<<1)              //  0x0002
+#define TypeSHORT       (1<<2)              //  0x0004
+#define TypeINT         (1<<3)              //  0x0008
+#define TypeLONG        (1<<4)              //  0x0010
+#define TypeFLOAT       (1<<5)              //  0x0020
+#define TypeDOUBLE      (1<<6)              //  0x0040
+#define TypeSIGNED      (1<<7)              //  0x0080
+#define TypeUNSIGNED    (1<<8)              //  0x0100
+#define TypeSTRUCT      (1<<9)              //  0x0200
+#define TypeENUM        (1<<11)             //  0x0400
+#define TypeTYPEDEF     (1<<12)             //  0x0800
+
+#define QualCONST       (1<<0)              //  0x01
+#define QualVOLATILE    (1<<1)              //  0x02
+#define QualNEAR        (1<<2)              //  0x04
+#define QualFAR         (1<<3)              //  0x08
+
+extern TPDeclSpec  GlobalTypes;
+//extern TPDeclSpec  LocalTypes;
+extern TPDeclSpec  GlobalObjects;
+//extern TPDeclSpec  LocalObjects;
+
+
+//  0x10
+TPDeclSpec NewSpecClass(WORD Class);
+TPDeclSpec NewSpecType(WORD Class, LPVOID Ptr);
+TPDeclSpec NewSpecQual(WORD Class);
+TPDeclSpec ConcatDeclSpec(TPDeclSpec Old, TPDeclSpec New);
+
+/* ********************************************* */
+
+TPDeclSpec  NewIdentifier(LPSTR Name);
+TPDeclSpec  NewPointer(TPDeclSpec Qualifier, TPDeclSpec Target);
+TPDeclSpec  NewArray(TPDeclSpec Decl, TPExprNode Expr);
+TPDeclSpec  NewFunc(TPDeclSpec Decl, LPVOID PList, LPVOID IdList);
+
+TPDeclSpec  AppendDecl(TPDeclSpec a, TPDeclSpec b);
+TPDeclSpec  MakeBrother(TPDeclSpec a, TPDeclSpec b);
+TPDeclSpec  AddInitializer(TPDeclSpec pDecl, TPExprNode pInit);
+TPDeclSpec  AddInitializerStr(TPDeclSpec pDec, LPSTR pStr);
+
+
+DWORD       CalcSizeOf(TPDeclSpec Ptr);                     // storage required
+BOOL        CompDecl(TPDeclSpec a, TPDeclSpec b);           // ? Same Type
+BOOL        IsIntegralType(TPDeclSpec Type);                // can type be represented as an integer
+
+
+#ifdef _DEBUG
+void        ParseDeclSpec(TPDeclSpec Ptr, BOOL DoBrothers);
+#endif // _DEBUG
+  
+/********************/
+/* ENUM descriptors */
+/********************/
+
+typedef struct TagEnumElement TEnumElement;
+typedef TEnumElement * TPEnumElement;
+struct TagEnumElement {
+        LPSTR           pszElementName;
+        BOOL            fAssigned;
+        DWORD           dwValue;
+        TPEnumElement   pNext;
+};
+
+typedef struct TagEnumSet TEnumSet;
+typedef TEnumSet * TPEnumSet;
+struct TagEnumSet {
+        LPSTR           pszSetName;
+        TPEnumElement   pElements;
+        TPEnumSet       pNext;
+};
+
+
+TPEnumElement   EnumElementMake(LPSTR pszName, TPExprNode pExpr);
+TPEnumElement   EnumElementAdd(TPEnumElement pList, TPEnumElement pNew);
+TPEnumElement   EnumElementFind(LPSTR pszName);
+TPEnumSet       EnumSetAdd(LPSTR szName, TPEnumElement pElements);
+
+#ifdef _DEBUG
+void            EnumElementPrintList(TPEnumElement pEl);
+void            EnumSetPrint(TPEnumSet pSet);
+void            EnumSetPrintList(void);
+#endif // _DEBUG
+
+/****************************/
+/* STRUCT/UNION descriptors */
+/****************************/
+
+typedef struct TagStructSet StructSet;
+typedef StructSet * LpStructSet;
+struct TagStructSet {
+         LPSTR          szSetName;
+         BOOL           fUnion;
+         TPDeclSpec     pElements;
+         LpStructSet    pNext;
+};
+
+LpStructSet     AddStructSet(LPSTR Name, BOOL Union, TPDeclSpec Elements);
+LONG            CalcStructElementOffset(LpStructSet Struct, LPSTR Field);
+TPDeclSpec      CalcStructElementType(LpStructSet Struct, LPSTR Field);
+
+#ifdef _DEBUG
+void            PrintStructSets(void);
+#endif // _DEBUG
+
+/* ***************************************************************** */
+/*  Declarations  */
+/* ************** */
+
+void        Declaration(TPDeclSpec Ptr, BOOL Global);
+TPDeclSpec  FindType(LPSTR Name);
+TPDeclSpec  FindGlobalObject(LPSTR Name);
+TPDeclSpec  FindLocalObject(LPSTR Name);
+
+BOOL IsIntegralType(TPDeclSpec Type);
+BOOL IsRealType(TPDeclSpec Type);
+
+BOOL        IsTypeQualifier(TPDeclSpec pTarget, int Qualifier);
+#define     IsTypeQualifierConst(pTarget)       IsTypeQualifier(pTarget, QualCONST)
+#define     IsTypeQualifierVolatile(pTarget)    IsTypeQualifier(pTarget, QualVOLATILE)
+#define     IsTypeQualifierNear(pTarget)        IsTypeQualifier(pTarget, QualNEAR)
+#define     IsTypeQualifierFar(pTarget)         IsTypeQualifier(pTarget, QualFAR)
+
+
+#ifdef _DEBUG
+void    ListGlobalTypes(void);
+void    ListLocalTypes(void);
+void    ListGlobalObjects(void);
+void    ListLocalObjects(void);
+#endif // _DEBUG
+
+/* eof */

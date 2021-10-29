@@ -1,0 +1,44 @@
+﻿  TypeCtrl.c
+  Statements.c
+  Main.c
+  Todo: Declaration function names to start with Decl?
+  Todo: Local and parameters:  unused variable warnings.
+  Todo: Local and parameters:  read before set warnings.
+  Todo: Local variables and parameters. how to find them when parsing expressions.
+  Todo: Local variables. generate expression code.
+  Lex.c
+  Initializers.c
+  warn XS here
+  warn XS here
+  Gen.c
+      **** GenDataObjectEnum(): improvement. Comment could be the enum symbol name?
+  Expr.c
+  ResultingType: calculate result of combination.
+  Optimize Add
+  Optimize Sub
+  Optimize Mul
+  Optimize Div
+  Optimize Mod
+  Optimize And
+  Optimize Or
+  Optimize Xor
+  Optimize >>
+  Optimize <<
+  Comparisons need to note the sign
+  Optimize ==
+  Comparisons need to note the sign
+  Optimize !=
+  Comparisons need to note the sign
+  Optimize <
+  Comparisons need to note the sign
+  Optimize <=
+  Comparisons need to note the sign
+  Optimize >
+  Comparisons need to note the sign
+  Optimize >=
+  Optimize &&
+  Optimize ||
+  C_Yacced.tab.c
+  Generating Code...
+  CC_Avr.vcxproj -> D:\DL\sean\RoyalHolloway\2019\CC_Avr\Debug\CC_Avr.exe
+  CC_Avr.vcxproj -> D:\DL\sean\RoyalHolloway\2019\CC_Avr\Debug\CC_Avr.pdb (Full PDB)

@@ -1,0 +1,1247 @@
+; SKC AVR Output - V1(Jan  2 2020)
+
+#define		_IO_SPL	0x3D
+#define		_IO_SPH	0x3E
+
+                                                            ; ##########################
+                                                            ; # Start of CONST segment #
+                     .section    CONST, "a"                 ; ##########################
+                     ;.endseg                               ; === End of CONST segment ===
+
+
+                                                            ; #########################
+                                                            ; # Start of INIT segment #
+                     .section    INIT,  "a"                 ; #########################
+                                                            ; This is the source of the initialization data
+                                                            ; #########################
+                     .section    .data                      ; # Start of DATA segment #
+                                                            ; #########################
+                                                            ; This is where the initialization data will be copied to
+                     ;.endseg                               ; === End of DATA segment ===
+
+
+                                                            ; ########################
+                     .section    .bss                       ; # Start of BSS segment #
+                                                            ; ########################
+                                                            ; Here starts the uninitialized data
+                     ;.endseg                               ; === End of BSS segment ===
+
+
+                                                            ; #########################
+                     .section    .text                      ; # Start of TEXT segment #
+                                                            ; #########################
+                                                            ; Here starts the executable code
+
+                     .global   Comparison
+Comparison:          ; ###########################################
+                     ; # Function: Comparison               
+                     ; #   Return: void                     
+                     ; #   Params: <none>                   
+                     ; #   CPU   : @Y+4, Return Address     
+                     ; #         : @Y+2, Preserved Frame Pointer
+                     ; #   Locals: @Y+1  , c  size=1 char   
+                     ; #         : sizeof(locals) = 1       
+                     ; ###########################################
+                     ; #### frame setup #########           ; 
+                     push      r29                          ;   2: (YH) preserve Frame
+                     push      r28                          ;   2: (YL)
+                     in        r29, _IO_SPH                 ;   1: FP <- SP
+                     in        r28, _IO_SPL                 ;   1:
+                     ; #### alloc locals ########           ; 
+                     sbiw      r28, 1                       ;   2: FP -= sizeof(locals))
+                     out       _IO_SPH, r29                 ;   1: SP <- FP
+                     out       _IO_SPL, r28                 ;   1:
+                     ; #### body text ###########           ; 
+                     ; ==== Compound Statement ============ ; L_compound_Id_000001
+                     ; ==== Expr Statement ================ ; 
+                     ldi       r26, 0x01                    ;   1: const 1
+                     ldi       r27, 0x00                    ;   1:
+                     movw      r4, r26                      ;   1:
+                     ldi       r26, 0x01                    ;   1: const 1
+                     ldi       r27, 0x00                    ;   1:
+                     movw      r6, r26                      ;   1:
+                     sub       r4, r6                       ;   1: Compare EQ16
+                     sbc       r5, r7                       ;   1:
+                     breq      L_EqDone_000002              ;   1:
+                     ser       r4                           ;   1:
+L_EqDone_000002:     inc       r4                           ;   1:
+                     ;      Expr end ------------           
+                     ; ==== Expr Statement ================ ; 
+                     ldi       r26, 0x01                    ;   1: const 1
+                     mov       r4, r26                      ;   1:
+                     ldi       r26, 0xff                    ;   1: const 255
+                     mov       r5, r26                      ;   1:
+                     sub       r4, r5                       ;   1: Compare EQ8
+                     breq      L_EqDone_000003              ;   1:
+                     ser       r4                           ;   1:
+L_EqDone_000003:     inc       r4                           ;   1:
+                     ;      Expr end ------------           
+                     ; ==== Expr Statement ================ ; 
+                     ldi       r26, 0xff                    ;   1: const 255
+                     mov       r4, r26                      ;   1:
+                     ldi       r26, 0x01                    ;   1: const 1
+                     mov       r5, r26                      ;   1:
+                     sub       r4, r5                       ;   1: Compare EQ8
+                     breq      L_EqDone_000004              ;   1:
+                     ser       r4                           ;   1:
+L_EqDone_000004:     inc       r4                           ;   1:
+                     ;      Expr end ------------           
+                     ; ==== Expr Statement ================ ; 
+                     ldd       r4, Y+1                      ;   2: c
+                     ldi       r26, 0x00                    ;   1: const 0
+                     mov       r5, r26                      ;   1:
+                     clr       r0                           ;   1: Mul 8
+L_MulMult_000005:    sbrc      r4, 0x00                     ; 1/3:
+                     add       r0, r5                       ;   1:
+                     lsl       r5                           ;   1:
+                     breq      L_MulDone_000006             ; 1/2:
+                     lsr       r4                           ;   1:
+                     brne      L_MulMult_000005             ; 1/2:
+L_MulDone_000006:    mov       r4, r0                       ;   1:
+                     ldi       r26, 0x01                    ;   1: const 1
+                     mov       r5, r26                      ;   1:
+                     add       r4, r5                       ;   1: Add8
+                     ldd       r5, Y+1                      ;   2: c
+                     ldi       r26, 0x00                    ;   1: const 0
+                     mov       r6, r26                      ;   1:
+                     clr       r0                           ;   1: Mul 8
+L_MulMult_000007:    sbrc      r5, 0x00                     ; 1/3:
+                     add       r0, r6                       ;   1:
+                     lsl       r6                           ;   1:
+                     breq      L_MulDone_000008             ; 1/2:
+                     lsr       r5                           ;   1:
+                     brne      L_MulMult_000007             ; 1/2:
+L_MulDone_000008:    mov       r5, r0                       ;   1:
+                     ldi       r26, 0x01                    ;   1: const 1
+                     mov       r6, r26                      ;   1:
+                     add       r5, r6                       ;   1: Add8
+                     sub       r4, r5                       ;   1: Compare EQ8
+                     breq      L_EqDone_000009              ;   1:
+                     ser       r4                           ;   1:
+L_EqDone_000009:     inc       r4                           ;   1:
+                     ;      Expr end ------------           
+                     ; ==== Expr Statement ================ ; 
+                     ldd       r4, Y+1                      ;   2: c
+                     ldi       r26, 0x00                    ;   1: const 0
+                     mov       r5, r26                      ;   1:
+                     clr       r0                           ;   1: Mul 8
+L_MulMult_000010:    sbrc      r4, 0x00                     ; 1/3:
+                     add       r0, r5                       ;   1:
+                     lsl       r5                           ;   1:
+                     breq      L_MulDone_000011             ; 1/2:
+                     lsr       r4                           ;   1:
+                     brne      L_MulMult_000010             ; 1/2:
+L_MulDone_000011:    mov       r4, r0                       ;   1:
+                     ldi       r26, 0x01                    ;   1: const 1
+                     mov       r5, r26                      ;   1:
+                     add       r4, r5                       ;   1: Add8
+                     ldd       r5, Y+1                      ;   2: c
+                     ldi       r26, 0x00                    ;   1: const 0
+                     mov       r6, r26                      ;   1:
+                     clr       r0                           ;   1: Mul 8
+L_MulMult_000012:    sbrc      r5, 0x00                     ; 1/3:
+                     add       r0, r6                       ;   1:
+                     lsl       r6                           ;   1:
+                     breq      L_MulDone_000013             ; 1/2:
+                     lsr       r5                           ;   1:
+                     brne      L_MulMult_000012             ; 1/2:
+L_MulDone_000013:    mov       r5, r0                       ;   1:
+                     ldi       r26, 0x01                    ;   1: const 1
+                     mov       r6, r26                      ;   1:
+                     sub       r5, r6                       ;   1: Sub8
+                     sub       r4, r5                       ;   1: Compare EQ8
+                     breq      L_EqDone_000014              ;   1:
+                     ser       r4                           ;   1:
+L_EqDone_000014:     inc       r4                           ;   1:
+                     ;      Expr end ------------           
+                     ; ==== Expr Statement ================ ; 
+                     ldd       r4, Y+1                      ;   2: c
+                     ldi       r26, 0x00                    ;   1: const 0
+                     mov       r5, r26                      ;   1:
+                     clr       r0                           ;   1: Mul 8
+L_MulMult_000015:    sbrc      r4, 0x00                     ; 1/3:
+                     add       r0, r5                       ;   1:
+                     lsl       r5                           ;   1:
+                     breq      L_MulDone_000016             ; 1/2:
+                     lsr       r4                           ;   1:
+                     brne      L_MulMult_000015             ; 1/2:
+L_MulDone_000016:    mov       r4, r0                       ;   1:
+                     ldi       r26, 0x01                    ;   1: const 1
+                     mov       r5, r26                      ;   1:
+                     sub       r4, r5                       ;   1: Sub8
+                     ldd       r5, Y+1                      ;   2: c
+                     ldi       r26, 0x00                    ;   1: const 0
+                     mov       r6, r26                      ;   1:
+                     clr       r0                           ;   1: Mul 8
+L_MulMult_000017:    sbrc      r5, 0x00                     ; 1/3:
+                     add       r0, r6                       ;   1:
+                     lsl       r6                           ;   1:
+                     breq      L_MulDone_000018             ; 1/2:
+                     lsr       r5                           ;   1:
+                     brne      L_MulMult_000017             ; 1/2:
+L_MulDone_000018:    mov       r5, r0                       ;   1:
+                     ldi       r26, 0x01                    ;   1: const 1
+                     mov       r6, r26                      ;   1:
+                     add       r5, r6                       ;   1: Add8
+                     sub       r4, r5                       ;   1: Compare EQ8
+                     breq      L_EqDone_000019              ;   1:
+                     ser       r4                           ;   1:
+L_EqDone_000019:     inc       r4                           ;   1:
+                     ;      Expr end ------------           
+                     ; ==== Expr Statement ================ ; 
+                     ldd       r4, Y+1                      ;   2: c
+                     ldi       r26, 0x00                    ;   1: const 0
+                     mov       r5, r26                      ;   1:
+                     clr       r0                           ;   1: Mul 8
+L_MulMult_000020:    sbrc      r4, 0x00                     ; 1/3:
+                     add       r0, r5                       ;   1:
+                     lsl       r5                           ;   1:
+                     breq      L_MulDone_000021             ; 1/2:
+                     lsr       r4                           ;   1:
+                     brne      L_MulMult_000020             ; 1/2:
+L_MulDone_000021:    mov       r4, r0                       ;   1:
+                     ldi       r26, 0x01                    ;   1: const 1
+                     mov       r5, r26                      ;   1:
+                     add       r4, r5                       ;   1: Add8
+                     mov       r0, r4                       ;   1: Signed extend by 1 bytes
+                     lsl       r0                           ;   1:
+                     clr       r0                           ;   1: 
+                     sbc       r0, r0                       ;   1:
+                     mov       r5, r0                       ;   1:
+                     ldd       r6, Y+1                      ;   2: c
+                     ldi       r26, 0x00                    ;   1: const 0
+                     mov       r7, r26                      ;   1:
+                     clr       r0                           ;   1: Mul 8
+L_MulMult_000022:    sbrc      r6, 0x00                     ; 1/3:
+                     add       r0, r7                       ;   1:
+                     lsl       r7                           ;   1:
+                     breq      L_MulDone_000023             ; 1/2:
+                     lsr       r6                           ;   1:
+                     brne      L_MulMult_000022             ; 1/2:
+L_MulDone_000023:    mov       r6, r0                       ;   1:
+                     ldi       r26, 0x01                    ;   1: const 1
+                     mov       r7, r26                      ;   1:
+                     sub       r6, r7                       ;   1: Sub8
+                     mov       r0, r6                       ;   1: Signed extend by 1 bytes
+                     lsl       r0                           ;   1:
+                     clr       r0                           ;   1: 
+                     sbc       r0, r0                       ;   1:
+                     mov       r7, r0                       ;   1:
+                     sub       r4, r6                       ;   1: Compare EQ16
+                     sbc       r5, r7                       ;   1:
+                     breq      L_EqDone_000024              ;   1:
+                     ser       r4                           ;   1:
+L_EqDone_000024:     inc       r4                           ;   1:
+                     ;      Expr end ------------           
+                     ; ==== Expr Statement ================ ; 
+                     ldi       r26, 0x01                    ;   1: const 1
+                     ldi       r27, 0x00                    ;   1:
+                     movw      r4, r26                      ;   1:
+                     ldi       r26, 0x01                    ;   1: const 1
+                     ldi       r27, 0x00                    ;   1:
+                     movw      r6, r26                      ;   1:
+                     sub       r4, r6                       ;   1: Compare NE16
+                     sbc       r5, r7                       ;   1:
+                     breq      L_NeDone_000025              ;   1:
+                     clr       r4                           ;   1:
+                     inc       r4                           ;   1:
+L_NeDone_000025:                                            ;    :
+                     ;      Expr end ------------           
+                     ; ==== Expr Statement ================ ; 
+                     ldi       r26, 0x01                    ;   1: const 1
+                     mov       r4, r26                      ;   1:
+                     ldi       r26, 0xff                    ;   1: const 255
+                     mov       r5, r26                      ;   1:
+                     sub       r4, r5                       ;   1: Compare NE8
+                     breq      L_NeDone_000026              ;   1:
+                     clr       r4                           ;   1:
+                     inc       r4                           ;   1:
+L_NeDone_000026:                                            ;    :
+                     ;      Expr end ------------           
+                     ; ==== Expr Statement ================ ; 
+                     ldi       r26, 0xff                    ;   1: const 255
+                     mov       r4, r26                      ;   1:
+                     ldi       r26, 0x01                    ;   1: const 1
+                     mov       r5, r26                      ;   1:
+                     sub       r4, r5                       ;   1: Compare NE8
+                     breq      L_NeDone_000027              ;   1:
+                     clr       r4                           ;   1:
+                     inc       r4                           ;   1:
+L_NeDone_000027:                                            ;    :
+                     ;      Expr end ------------           
+                     ; ==== Expr Statement ================ ; 
+                     ldd       r4, Y+1                      ;   2: c
+                     ldi       r26, 0x00                    ;   1: const 0
+                     mov       r5, r26                      ;   1:
+                     clr       r0                           ;   1: Mul 8
+L_MulMult_000028:    sbrc      r4, 0x00                     ; 1/3:
+                     add       r0, r5                       ;   1:
+                     lsl       r5                           ;   1:
+                     breq      L_MulDone_000029             ; 1/2:
+                     lsr       r4                           ;   1:
+                     brne      L_MulMult_000028             ; 1/2:
+L_MulDone_000029:    mov       r4, r0                       ;   1:
+                     ldi       r26, 0x01                    ;   1: const 1
+                     mov       r5, r26                      ;   1:
+                     add       r4, r5                       ;   1: Add8
+                     ldd       r5, Y+1                      ;   2: c
+                     ldi       r26, 0x00                    ;   1: const 0
+                     mov       r6, r26                      ;   1:
+                     clr       r0                           ;   1: Mul 8
+L_MulMult_000030:    sbrc      r5, 0x00                     ; 1/3:
+                     add       r0, r6                       ;   1:
+                     lsl       r6                           ;   1:
+                     breq      L_MulDone_000031             ; 1/2:
+                     lsr       r5                           ;   1:
+                     brne      L_MulMult_000030             ; 1/2:
+L_MulDone_000031:    mov       r5, r0                       ;   1:
+                     ldi       r26, 0x01                    ;   1: const 1
+                     mov       r6, r26                      ;   1:
+                     add       r5, r6                       ;   1: Add8
+                     sub       r4, r5                       ;   1: Compare NE8
+                     breq      L_NeDone_000032              ;   1:
+                     clr       r4                           ;   1:
+                     inc       r4                           ;   1:
+L_NeDone_000032:                                            ;    :
+                     ;      Expr end ------------           
+                     ; ==== Expr Statement ================ ; 
+                     ldd       r4, Y+1                      ;   2: c
+                     ldi       r26, 0x00                    ;   1: const 0
+                     mov       r5, r26                      ;   1:
+                     clr       r0                           ;   1: Mul 8
+L_MulMult_000033:    sbrc      r4, 0x00                     ; 1/3:
+                     add       r0, r5                       ;   1:
+                     lsl       r5                           ;   1:
+                     breq      L_MulDone_000034             ; 1/2:
+                     lsr       r4                           ;   1:
+                     brne      L_MulMult_000033             ; 1/2:
+L_MulDone_000034:    mov       r4, r0                       ;   1:
+                     ldi       r26, 0x01                    ;   1: const 1
+                     mov       r5, r26                      ;   1:
+                     add       r4, r5                       ;   1: Add8
+                     ldd       r5, Y+1                      ;   2: c
+                     ldi       r26, 0x00                    ;   1: const 0
+                     mov       r6, r26                      ;   1:
+                     clr       r0                           ;   1: Mul 8
+L_MulMult_000035:    sbrc      r5, 0x00                     ; 1/3:
+                     add       r0, r6                       ;   1:
+                     lsl       r6                           ;   1:
+                     breq      L_MulDone_000036             ; 1/2:
+                     lsr       r5                           ;   1:
+                     brne      L_MulMult_000035             ; 1/2:
+L_MulDone_000036:    mov       r5, r0                       ;   1:
+                     ldi       r26, 0x01                    ;   1: const 1
+                     mov       r6, r26                      ;   1:
+                     sub       r5, r6                       ;   1: Sub8
+                     sub       r4, r5                       ;   1: Compare NE8
+                     breq      L_NeDone_000037              ;   1:
+                     clr       r4                           ;   1:
+                     inc       r4                           ;   1:
+L_NeDone_000037:                                            ;    :
+                     ;      Expr end ------------           
+                     ; ==== Expr Statement ================ ; 
+                     ldd       r4, Y+1                      ;   2: c
+                     ldi       r26, 0x00                    ;   1: const 0
+                     mov       r5, r26                      ;   1:
+                     clr       r0                           ;   1: Mul 8
+L_MulMult_000038:    sbrc      r4, 0x00                     ; 1/3:
+                     add       r0, r5                       ;   1:
+                     lsl       r5                           ;   1:
+                     breq      L_MulDone_000039             ; 1/2:
+                     lsr       r4                           ;   1:
+                     brne      L_MulMult_000038             ; 1/2:
+L_MulDone_000039:    mov       r4, r0                       ;   1:
+                     ldi       r26, 0x01                    ;   1: const 1
+                     mov       r5, r26                      ;   1:
+                     sub       r4, r5                       ;   1: Sub8
+                     ldd       r5, Y+1                      ;   2: c
+                     ldi       r26, 0x00                    ;   1: const 0
+                     mov       r6, r26                      ;   1:
+                     clr       r0                           ;   1: Mul 8
+L_MulMult_000040:    sbrc      r5, 0x00                     ; 1/3:
+                     add       r0, r6                       ;   1:
+                     lsl       r6                           ;   1:
+                     breq      L_MulDone_000041             ; 1/2:
+                     lsr       r5                           ;   1:
+                     brne      L_MulMult_000040             ; 1/2:
+L_MulDone_000041:    mov       r5, r0                       ;   1:
+                     ldi       r26, 0x01                    ;   1: const 1
+                     mov       r6, r26                      ;   1:
+                     add       r5, r6                       ;   1: Add8
+                     sub       r4, r5                       ;   1: Compare NE8
+                     breq      L_NeDone_000042              ;   1:
+                     clr       r4                           ;   1:
+                     inc       r4                           ;   1:
+L_NeDone_000042:                                            ;    :
+                     ;      Expr end ------------           
+                     ; ==== Expr Statement ================ ; 
+                     ldd       r4, Y+1                      ;   2: c
+                     ldi       r26, 0x00                    ;   1: const 0
+                     mov       r5, r26                      ;   1:
+                     clr       r0                           ;   1: Mul 8
+L_MulMult_000043:    sbrc      r4, 0x00                     ; 1/3:
+                     add       r0, r5                       ;   1:
+                     lsl       r5                           ;   1:
+                     breq      L_MulDone_000044             ; 1/2:
+                     lsr       r4                           ;   1:
+                     brne      L_MulMult_000043             ; 1/2:
+L_MulDone_000044:    mov       r4, r0                       ;   1:
+                     ldi       r26, 0x01                    ;   1: const 1
+                     mov       r5, r26                      ;   1:
+                     add       r4, r5                       ;   1: Add8
+                     mov       r0, r4                       ;   1: Signed extend by 1 bytes
+                     lsl       r0                           ;   1:
+                     clr       r0                           ;   1: 
+                     sbc       r0, r0                       ;   1:
+                     mov       r5, r0                       ;   1:
+                     ldd       r6, Y+1                      ;   2: c
+                     ldi       r26, 0x00                    ;   1: const 0
+                     mov       r7, r26                      ;   1:
+                     clr       r0                           ;   1: Mul 8
+L_MulMult_000045:    sbrc      r6, 0x00                     ; 1/3:
+                     add       r0, r7                       ;   1:
+                     lsl       r7                           ;   1:
+                     breq      L_MulDone_000046             ; 1/2:
+                     lsr       r6                           ;   1:
+                     brne      L_MulMult_000045             ; 1/2:
+L_MulDone_000046:    mov       r6, r0                       ;   1:
+                     ldi       r26, 0x01                    ;   1: const 1
+                     mov       r7, r26                      ;   1:
+                     sub       r6, r7                       ;   1: Sub8
+                     mov       r0, r6                       ;   1: Signed extend by 1 bytes
+                     lsl       r0                           ;   1:
+                     clr       r0                           ;   1: 
+                     sbc       r0, r0                       ;   1:
+                     mov       r7, r0                       ;   1:
+                     sub       r4, r6                       ;   1: Compare NE16
+                     sbc       r5, r7                       ;   1:
+                     breq      L_NeDone_000047              ;   1:
+                     clr       r4                           ;   1:
+                     inc       r4                           ;   1:
+L_NeDone_000047:                                            ;    :
+                     ;      Expr end ------------           
+                     ; ==== Expr Statement ================ ; 
+                     ldi       r26, 0x01                    ;   1: const 1
+                     ldi       r27, 0x00                    ;   1:
+                     movw      r4, r26                      ;   1:
+                     ldi       r26, 0x01                    ;   1: const 1
+                     ldi       r27, 0x00                    ;   1:
+                     movw      r6, r26                      ;   1:
+                     sub       r4, r6                       ;   1: Compare LT16
+                     sbc       r5, r7                       ;   1:
+                     brlt      L_LtTrue_000048              ; 1/2:  signed
+                     clr       r4                           ;   1:
+                     rjmp      L_LtOut_000049               ;   1:
+L_LtTrue_000048:     clr       r4                           ;   1:
+                     inc       r4                           ;   1:
+L_LtOut_000049:                                             ;    :
+                     ;      Expr end ------------           
+                     ; ==== Expr Statement ================ ; 
+                     ldi       r26, 0x01                    ;   1: const 1
+                     mov       r4, r26                      ;   1:
+                     ldi       r26, 0xff                    ;   1: const 255
+                     mov       r5, r26                      ;   1:
+                     sub       r4, r5                       ;   1: Compare LT8
+                     brlt      L_LtTrue_000050              ; 1/2:  signed
+                     clr       r4                           ;   1:
+                     rjmp      L_LtOut_000051               ;   1:
+L_LtTrue_000050:     clr       r4                           ;   1:
+                     inc       r4                           ;   1:
+L_LtOut_000051:                                             ;    :
+                     ;      Expr end ------------           
+                     ; ==== Expr Statement ================ ; 
+                     ldi       r26, 0xff                    ;   1: const 255
+                     mov       r4, r26                      ;   1:
+                     ldi       r26, 0x01                    ;   1: const 1
+                     mov       r5, r26                      ;   1:
+                     sub       r4, r5                       ;   1: Compare LT8
+                     brlt      L_LtTrue_000052              ; 1/2:  signed
+                     clr       r4                           ;   1:
+                     rjmp      L_LtOut_000053               ;   1:
+L_LtTrue_000052:     clr       r4                           ;   1:
+                     inc       r4                           ;   1:
+L_LtOut_000053:                                             ;    :
+                     ;      Expr end ------------           
+                     ; ==== Expr Statement ================ ; 
+                     ldd       r4, Y+1                      ;   2: c
+                     ldi       r26, 0x00                    ;   1: const 0
+                     mov       r5, r26                      ;   1:
+                     clr       r0                           ;   1: Mul 8
+L_MulMult_000054:    sbrc      r4, 0x00                     ; 1/3:
+                     add       r0, r5                       ;   1:
+                     lsl       r5                           ;   1:
+                     breq      L_MulDone_000055             ; 1/2:
+                     lsr       r4                           ;   1:
+                     brne      L_MulMult_000054             ; 1/2:
+L_MulDone_000055:    mov       r4, r0                       ;   1:
+                     ldi       r26, 0x01                    ;   1: const 1
+                     mov       r5, r26                      ;   1:
+                     add       r4, r5                       ;   1: Add8
+                     ldd       r5, Y+1                      ;   2: c
+                     ldi       r26, 0x00                    ;   1: const 0
+                     mov       r6, r26                      ;   1:
+                     clr       r0                           ;   1: Mul 8
+L_MulMult_000056:    sbrc      r5, 0x00                     ; 1/3:
+                     add       r0, r6                       ;   1:
+                     lsl       r6                           ;   1:
+                     breq      L_MulDone_000057             ; 1/2:
+                     lsr       r5                           ;   1:
+                     brne      L_MulMult_000056             ; 1/2:
+L_MulDone_000057:    mov       r5, r0                       ;   1:
+                     ldi       r26, 0x01                    ;   1: const 1
+                     mov       r6, r26                      ;   1:
+                     add       r5, r6                       ;   1: Add8
+                     sub       r4, r5                       ;   1: Compare LT8
+                     brlt      L_LtTrue_000058              ; 1/2:  signed
+                     clr       r4                           ;   1:
+                     rjmp      L_LtOut_000059               ;   1:
+L_LtTrue_000058:     clr       r4                           ;   1:
+                     inc       r4                           ;   1:
+L_LtOut_000059:                                             ;    :
+                     ;      Expr end ------------           
+                     ; ==== Expr Statement ================ ; 
+                     ldd       r4, Y+1                      ;   2: c
+                     ldi       r26, 0x00                    ;   1: const 0
+                     mov       r5, r26                      ;   1:
+                     clr       r0                           ;   1: Mul 8
+L_MulMult_000060:    sbrc      r4, 0x00                     ; 1/3:
+                     add       r0, r5                       ;   1:
+                     lsl       r5                           ;   1:
+                     breq      L_MulDone_000061             ; 1/2:
+                     lsr       r4                           ;   1:
+                     brne      L_MulMult_000060             ; 1/2:
+L_MulDone_000061:    mov       r4, r0                       ;   1:
+                     ldi       r26, 0x01                    ;   1: const 1
+                     mov       r5, r26                      ;   1:
+                     add       r4, r5                       ;   1: Add8
+                     ldd       r5, Y+1                      ;   2: c
+                     ldi       r26, 0x00                    ;   1: const 0
+                     mov       r6, r26                      ;   1:
+                     clr       r0                           ;   1: Mul 8
+L_MulMult_000062:    sbrc      r5, 0x00                     ; 1/3:
+                     add       r0, r6                       ;   1:
+                     lsl       r6                           ;   1:
+                     breq      L_MulDone_000063             ; 1/2:
+                     lsr       r5                           ;   1:
+                     brne      L_MulMult_000062             ; 1/2:
+L_MulDone_000063:    mov       r5, r0                       ;   1:
+                     ldi       r26, 0x01                    ;   1: const 1
+                     mov       r6, r26                      ;   1:
+                     sub       r5, r6                       ;   1: Sub8
+                     sub       r4, r5                       ;   1: Compare LT8
+                     brlt      L_LtTrue_000064              ; 1/2:  signed
+                     clr       r4                           ;   1:
+                     rjmp      L_LtOut_000065               ;   1:
+L_LtTrue_000064:     clr       r4                           ;   1:
+                     inc       r4                           ;   1:
+L_LtOut_000065:                                             ;    :
+                     ;      Expr end ------------           
+                     ; ==== Expr Statement ================ ; 
+                     ldd       r4, Y+1                      ;   2: c
+                     ldi       r26, 0x00                    ;   1: const 0
+                     mov       r5, r26                      ;   1:
+                     clr       r0                           ;   1: Mul 8
+L_MulMult_000066:    sbrc      r4, 0x00                     ; 1/3:
+                     add       r0, r5                       ;   1:
+                     lsl       r5                           ;   1:
+                     breq      L_MulDone_000067             ; 1/2:
+                     lsr       r4                           ;   1:
+                     brne      L_MulMult_000066             ; 1/2:
+L_MulDone_000067:    mov       r4, r0                       ;   1:
+                     ldi       r26, 0x01                    ;   1: const 1
+                     mov       r5, r26                      ;   1:
+                     sub       r4, r5                       ;   1: Sub8
+                     ldd       r5, Y+1                      ;   2: c
+                     ldi       r26, 0x00                    ;   1: const 0
+                     mov       r6, r26                      ;   1:
+                     clr       r0                           ;   1: Mul 8
+L_MulMult_000068:    sbrc      r5, 0x00                     ; 1/3:
+                     add       r0, r6                       ;   1:
+                     lsl       r6                           ;   1:
+                     breq      L_MulDone_000069             ; 1/2:
+                     lsr       r5                           ;   1:
+                     brne      L_MulMult_000068             ; 1/2:
+L_MulDone_000069:    mov       r5, r0                       ;   1:
+                     ldi       r26, 0x01                    ;   1: const 1
+                     mov       r6, r26                      ;   1:
+                     add       r5, r6                       ;   1: Add8
+                     sub       r4, r5                       ;   1: Compare LT8
+                     brlt      L_LtTrue_000070              ; 1/2:  signed
+                     clr       r4                           ;   1:
+                     rjmp      L_LtOut_000071               ;   1:
+L_LtTrue_000070:     clr       r4                           ;   1:
+                     inc       r4                           ;   1:
+L_LtOut_000071:                                             ;    :
+                     ;      Expr end ------------           
+                     ; ==== Expr Statement ================ ; 
+                     ldd       r4, Y+1                      ;   2: c
+                     ldi       r26, 0x00                    ;   1: const 0
+                     mov       r5, r26                      ;   1:
+                     clr       r0                           ;   1: Mul 8
+L_MulMult_000072:    sbrc      r4, 0x00                     ; 1/3:
+                     add       r0, r5                       ;   1:
+                     lsl       r5                           ;   1:
+                     breq      L_MulDone_000073             ; 1/2:
+                     lsr       r4                           ;   1:
+                     brne      L_MulMult_000072             ; 1/2:
+L_MulDone_000073:    mov       r4, r0                       ;   1:
+                     ldi       r26, 0x01                    ;   1: const 1
+                     mov       r5, r26                      ;   1:
+                     add       r4, r5                       ;   1: Add8
+                     mov       r0, r4                       ;   1: Signed extend by 1 bytes
+                     lsl       r0                           ;   1:
+                     clr       r0                           ;   1: 
+                     sbc       r0, r0                       ;   1:
+                     mov       r5, r0                       ;   1:
+                     ldd       r6, Y+1                      ;   2: c
+                     ldi       r26, 0x00                    ;   1: const 0
+                     mov       r7, r26                      ;   1:
+                     clr       r0                           ;   1: Mul 8
+L_MulMult_000074:    sbrc      r6, 0x00                     ; 1/3:
+                     add       r0, r7                       ;   1:
+                     lsl       r7                           ;   1:
+                     breq      L_MulDone_000075             ; 1/2:
+                     lsr       r6                           ;   1:
+                     brne      L_MulMult_000074             ; 1/2:
+L_MulDone_000075:    mov       r6, r0                       ;   1:
+                     ldi       r26, 0x01                    ;   1: const 1
+                     mov       r7, r26                      ;   1:
+                     sub       r6, r7                       ;   1: Sub8
+                     mov       r0, r6                       ;   1: Signed extend by 1 bytes
+                     lsl       r0                           ;   1:
+                     clr       r0                           ;   1: 
+                     sbc       r0, r0                       ;   1:
+                     mov       r7, r0                       ;   1:
+                     sub       r4, r6                       ;   1: Compare LT16
+                     sbc       r5, r7                       ;   1:
+                     brlo      L_LtTrue_000076              ; 1/2:  unsigned
+                     clr       r4                           ;   1:
+                     rjmp      L_LtOut_000077               ;   1:
+L_LtTrue_000076:     clr       r4                           ;   1:
+                     inc       r4                           ;   1:
+L_LtOut_000077:                                             ;    :
+                     ;      Expr end ------------           
+                     ; ==== Expr Statement ================ ; 
+                     ldi       r26, 0x01                    ;   1: const 1
+                     ldi       r27, 0x00                    ;   1:
+                     movw      r4, r26                      ;   1:
+                     ldi       r26, 0x01                    ;   1: const 1
+                     ldi       r27, 0x00                    ;   1:
+                     movw      r6, r26                      ;   1:
+                     sub       r4, r6                       ;   1: Compare GE16
+                     sbc       r5, r7                       ;   1:
+                     brge      L_GeTrue_000078              ; 1/2:  signed
+                     clr       r4                           ;   1:
+                     rjmp      L_GeOut_000079               ;   1:
+L_GeTrue_000078:     clr       r4                           ;   1:
+                     inc       r4                           ;   1:
+L_GeOut_000079:                                             ;    :
+                     ;      Expr end ------------           
+                     ; ==== Expr Statement ================ ; 
+                     ldi       r26, 0x01                    ;   1: const 1
+                     mov       r4, r26                      ;   1:
+                     ldi       r26, 0xff                    ;   1: const 255
+                     mov       r5, r26                      ;   1:
+                     sub       r4, r5                       ;   1: Compare GE8
+                     brge      L_GeTrue_000080              ; 1/2:  signed
+                     clr       r4                           ;   1:
+                     rjmp      L_GeOut_000081               ;   1:
+L_GeTrue_000080:     clr       r4                           ;   1:
+                     inc       r4                           ;   1:
+L_GeOut_000081:                                             ;    :
+                     ;      Expr end ------------           
+                     ; ==== Expr Statement ================ ; 
+                     ldi       r26, 0xff                    ;   1: const 255
+                     mov       r4, r26                      ;   1:
+                     ldi       r26, 0x01                    ;   1: const 1
+                     mov       r5, r26                      ;   1:
+                     sub       r4, r5                       ;   1: Compare GE8
+                     brge      L_GeTrue_000082              ; 1/2:  signed
+                     clr       r4                           ;   1:
+                     rjmp      L_GeOut_000083               ;   1:
+L_GeTrue_000082:     clr       r4                           ;   1:
+                     inc       r4                           ;   1:
+L_GeOut_000083:                                             ;    :
+                     ;      Expr end ------------           
+                     ; ==== Expr Statement ================ ; 
+                     ldd       r4, Y+1                      ;   2: c
+                     ldi       r26, 0x00                    ;   1: const 0
+                     mov       r5, r26                      ;   1:
+                     clr       r0                           ;   1: Mul 8
+L_MulMult_000084:    sbrc      r4, 0x00                     ; 1/3:
+                     add       r0, r5                       ;   1:
+                     lsl       r5                           ;   1:
+                     breq      L_MulDone_000085             ; 1/2:
+                     lsr       r4                           ;   1:
+                     brne      L_MulMult_000084             ; 1/2:
+L_MulDone_000085:    mov       r4, r0                       ;   1:
+                     ldi       r26, 0x01                    ;   1: const 1
+                     mov       r5, r26                      ;   1:
+                     add       r4, r5                       ;   1: Add8
+                     ldd       r5, Y+1                      ;   2: c
+                     ldi       r26, 0x00                    ;   1: const 0
+                     mov       r6, r26                      ;   1:
+                     clr       r0                           ;   1: Mul 8
+L_MulMult_000086:    sbrc      r5, 0x00                     ; 1/3:
+                     add       r0, r6                       ;   1:
+                     lsl       r6                           ;   1:
+                     breq      L_MulDone_000087             ; 1/2:
+                     lsr       r5                           ;   1:
+                     brne      L_MulMult_000086             ; 1/2:
+L_MulDone_000087:    mov       r5, r0                       ;   1:
+                     ldi       r26, 0x01                    ;   1: const 1
+                     mov       r6, r26                      ;   1:
+                     add       r5, r6                       ;   1: Add8
+                     sub       r4, r5                       ;   1: Compare GE8
+                     brge      L_GeTrue_000088              ; 1/2:  signed
+                     clr       r4                           ;   1:
+                     rjmp      L_GeOut_000089               ;   1:
+L_GeTrue_000088:     clr       r4                           ;   1:
+                     inc       r4                           ;   1:
+L_GeOut_000089:                                             ;    :
+                     ;      Expr end ------------           
+                     ; ==== Expr Statement ================ ; 
+                     ldd       r4, Y+1                      ;   2: c
+                     ldi       r26, 0x00                    ;   1: const 0
+                     mov       r5, r26                      ;   1:
+                     clr       r0                           ;   1: Mul 8
+L_MulMult_000090:    sbrc      r4, 0x00                     ; 1/3:
+                     add       r0, r5                       ;   1:
+                     lsl       r5                           ;   1:
+                     breq      L_MulDone_000091             ; 1/2:
+                     lsr       r4                           ;   1:
+                     brne      L_MulMult_000090             ; 1/2:
+L_MulDone_000091:    mov       r4, r0                       ;   1:
+                     ldi       r26, 0x01                    ;   1: const 1
+                     mov       r5, r26                      ;   1:
+                     add       r4, r5                       ;   1: Add8
+                     ldd       r5, Y+1                      ;   2: c
+                     ldi       r26, 0x00                    ;   1: const 0
+                     mov       r6, r26                      ;   1:
+                     clr       r0                           ;   1: Mul 8
+L_MulMult_000092:    sbrc      r5, 0x00                     ; 1/3:
+                     add       r0, r6                       ;   1:
+                     lsl       r6                           ;   1:
+                     breq      L_MulDone_000093             ; 1/2:
+                     lsr       r5                           ;   1:
+                     brne      L_MulMult_000092             ; 1/2:
+L_MulDone_000093:    mov       r5, r0                       ;   1:
+                     ldi       r26, 0x01                    ;   1: const 1
+                     mov       r6, r26                      ;   1:
+                     sub       r5, r6                       ;   1: Sub8
+                     sub       r4, r5                       ;   1: Compare GE8
+                     brge      L_GeTrue_000094              ; 1/2:  signed
+                     clr       r4                           ;   1:
+                     rjmp      L_GeOut_000095               ;   1:
+L_GeTrue_000094:     clr       r4                           ;   1:
+                     inc       r4                           ;   1:
+L_GeOut_000095:                                             ;    :
+                     ;      Expr end ------------           
+                     ; ==== Expr Statement ================ ; 
+                     ldd       r4, Y+1                      ;   2: c
+                     ldi       r26, 0x00                    ;   1: const 0
+                     mov       r5, r26                      ;   1:
+                     clr       r0                           ;   1: Mul 8
+L_MulMult_000096:    sbrc      r4, 0x00                     ; 1/3:
+                     add       r0, r5                       ;   1:
+                     lsl       r5                           ;   1:
+                     breq      L_MulDone_000097             ; 1/2:
+                     lsr       r4                           ;   1:
+                     brne      L_MulMult_000096             ; 1/2:
+L_MulDone_000097:    mov       r4, r0                       ;   1:
+                     ldi       r26, 0x01                    ;   1: const 1
+                     mov       r5, r26                      ;   1:
+                     sub       r4, r5                       ;   1: Sub8
+                     ldd       r5, Y+1                      ;   2: c
+                     ldi       r26, 0x00                    ;   1: const 0
+                     mov       r6, r26                      ;   1:
+                     clr       r0                           ;   1: Mul 8
+L_MulMult_000098:    sbrc      r5, 0x00                     ; 1/3:
+                     add       r0, r6                       ;   1:
+                     lsl       r6                           ;   1:
+                     breq      L_MulDone_000099             ; 1/2:
+                     lsr       r5                           ;   1:
+                     brne      L_MulMult_000098             ; 1/2:
+L_MulDone_000099:    mov       r5, r0                       ;   1:
+                     ldi       r26, 0x01                    ;   1: const 1
+                     mov       r6, r26                      ;   1:
+                     add       r5, r6                       ;   1: Add8
+                     sub       r4, r5                       ;   1: Compare GE8
+                     brge      L_GeTrue_000100              ; 1/2:  signed
+                     clr       r4                           ;   1:
+                     rjmp      L_GeOut_000101               ;   1:
+L_GeTrue_000100:     clr       r4                           ;   1:
+                     inc       r4                           ;   1:
+L_GeOut_000101:                                             ;    :
+                     ;      Expr end ------------           
+                     ; ==== Expr Statement ================ ; 
+                     ldd       r4, Y+1                      ;   2: c
+                     ldi       r26, 0x00                    ;   1: const 0
+                     mov       r5, r26                      ;   1:
+                     clr       r0                           ;   1: Mul 8
+L_MulMult_000102:    sbrc      r4, 0x00                     ; 1/3:
+                     add       r0, r5                       ;   1:
+                     lsl       r5                           ;   1:
+                     breq      L_MulDone_000103             ; 1/2:
+                     lsr       r4                           ;   1:
+                     brne      L_MulMult_000102             ; 1/2:
+L_MulDone_000103:    mov       r4, r0                       ;   1:
+                     ldi       r26, 0x01                    ;   1: const 1
+                     mov       r5, r26                      ;   1:
+                     add       r4, r5                       ;   1: Add8
+                     mov       r0, r4                       ;   1: Signed extend by 1 bytes
+                     lsl       r0                           ;   1:
+                     clr       r0                           ;   1: 
+                     sbc       r0, r0                       ;   1:
+                     mov       r5, r0                       ;   1:
+                     ldd       r6, Y+1                      ;   2: c
+                     ldi       r26, 0x00                    ;   1: const 0
+                     mov       r7, r26                      ;   1:
+                     clr       r0                           ;   1: Mul 8
+L_MulMult_000104:    sbrc      r6, 0x00                     ; 1/3:
+                     add       r0, r7                       ;   1:
+                     lsl       r7                           ;   1:
+                     breq      L_MulDone_000105             ; 1/2:
+                     lsr       r6                           ;   1:
+                     brne      L_MulMult_000104             ; 1/2:
+L_MulDone_000105:    mov       r6, r0                       ;   1:
+                     ldi       r26, 0x01                    ;   1: const 1
+                     mov       r7, r26                      ;   1:
+                     sub       r6, r7                       ;   1: Sub8
+                     mov       r0, r6                       ;   1: Signed extend by 1 bytes
+                     lsl       r0                           ;   1:
+                     clr       r0                           ;   1: 
+                     sbc       r0, r0                       ;   1:
+                     mov       r7, r0                       ;   1:
+                     sub       r4, r6                       ;   1: Compare GE16
+                     sbc       r5, r7                       ;   1:
+                     brsh      L_GeTrue_000106              ; 1/2:  unsigned
+                     clr       r4                           ;   1:
+                     rjmp      L_GeOut_000107               ;   1:
+L_GeTrue_000106:     clr       r4                           ;   1:
+                     inc       r4                           ;   1:
+L_GeOut_000107:                                             ;    :
+                     ;      Expr end ------------           
+                     ; ==== Expr Statement ================ ; 
+                     ldi       r26, 0x01                    ;   1: const 1
+                     ldi       r27, 0x00                    ;   1:
+                     movw      r4, r26                      ;   1:
+                     ldi       r26, 0x01                    ;   1: const 1
+                     ldi       r27, 0x00                    ;   1:
+                     movw      r6, r26                      ;   1:
+                     sub       r6, r4                       ;   1: Compare GT16
+                     sbc       r7, r5                       ;   1:
+                     brlt      L_GtTrue_000108              ; 1/2:  signed
+                     clr       r4                           ;   1:
+                     rjmp      L_GtOut_000109               ;   1:
+L_GtTrue_000108:     clr       r4                           ;   1:
+                     inc       r4                           ;   1:
+L_GtOut_000109:                                             ;    :
+                     ;      Expr end ------------           
+                     ; ==== Expr Statement ================ ; 
+                     ldi       r26, 0x01                    ;   1: const 1
+                     mov       r4, r26                      ;   1:
+                     ldi       r26, 0xff                    ;   1: const 255
+                     mov       r5, r26                      ;   1:
+                     sub       r5, r4                       ;   1: Compare GT8
+                     brlt      L_GtTrue_000110              ; 1/2:  signed
+                     clr       r4                           ;   1:
+                     rjmp      L_GtOut_000111               ;   1:
+L_GtTrue_000110:     clr       r4                           ;   1:
+                     inc       r4                           ;   1:
+L_GtOut_000111:                                             ;    :
+                     ;      Expr end ------------           
+                     ; ==== Expr Statement ================ ; 
+                     ldi       r26, 0xff                    ;   1: const 255
+                     mov       r4, r26                      ;   1:
+                     ldi       r26, 0x01                    ;   1: const 1
+                     mov       r5, r26                      ;   1:
+                     sub       r5, r4                       ;   1: Compare GT8
+                     brlt      L_GtTrue_000112              ; 1/2:  signed
+                     clr       r4                           ;   1:
+                     rjmp      L_GtOut_000113               ;   1:
+L_GtTrue_000112:     clr       r4                           ;   1:
+                     inc       r4                           ;   1:
+L_GtOut_000113:                                             ;    :
+                     ;      Expr end ------------           
+                     ; ==== Expr Statement ================ ; 
+                     ldd       r4, Y+1                      ;   2: c
+                     ldi       r26, 0x00                    ;   1: const 0
+                     mov       r5, r26                      ;   1:
+                     clr       r0                           ;   1: Mul 8
+L_MulMult_000114:    sbrc      r4, 0x00                     ; 1/3:
+                     add       r0, r5                       ;   1:
+                     lsl       r5                           ;   1:
+                     breq      L_MulDone_000115             ; 1/2:
+                     lsr       r4                           ;   1:
+                     brne      L_MulMult_000114             ; 1/2:
+L_MulDone_000115:    mov       r4, r0                       ;   1:
+                     ldi       r26, 0x01                    ;   1: const 1
+                     mov       r5, r26                      ;   1:
+                     add       r4, r5                       ;   1: Add8
+                     ldd       r5, Y+1                      ;   2: c
+                     ldi       r26, 0x00                    ;   1: const 0
+                     mov       r6, r26                      ;   1:
+                     clr       r0                           ;   1: Mul 8
+L_MulMult_000116:    sbrc      r5, 0x00                     ; 1/3:
+                     add       r0, r6                       ;   1:
+                     lsl       r6                           ;   1:
+                     breq      L_MulDone_000117             ; 1/2:
+                     lsr       r5                           ;   1:
+                     brne      L_MulMult_000116             ; 1/2:
+L_MulDone_000117:    mov       r5, r0                       ;   1:
+                     ldi       r26, 0x01                    ;   1: const 1
+                     mov       r6, r26                      ;   1:
+                     add       r5, r6                       ;   1: Add8
+                     sub       r5, r4                       ;   1: Compare GT8
+                     brlt      L_GtTrue_000118              ; 1/2:  signed
+                     clr       r4                           ;   1:
+                     rjmp      L_GtOut_000119               ;   1:
+L_GtTrue_000118:     clr       r4                           ;   1:
+                     inc       r4                           ;   1:
+L_GtOut_000119:                                             ;    :
+                     ;      Expr end ------------           
+                     ; ==== Expr Statement ================ ; 
+                     ldd       r4, Y+1                      ;   2: c
+                     ldi       r26, 0x00                    ;   1: const 0
+                     mov       r5, r26                      ;   1:
+                     clr       r0                           ;   1: Mul 8
+L_MulMult_000120:    sbrc      r4, 0x00                     ; 1/3:
+                     add       r0, r5                       ;   1:
+                     lsl       r5                           ;   1:
+                     breq      L_MulDone_000121             ; 1/2:
+                     lsr       r4                           ;   1:
+                     brne      L_MulMult_000120             ; 1/2:
+L_MulDone_000121:    mov       r4, r0                       ;   1:
+                     ldi       r26, 0x01                    ;   1: const 1
+                     mov       r5, r26                      ;   1:
+                     add       r4, r5                       ;   1: Add8
+                     ldd       r5, Y+1                      ;   2: c
+                     ldi       r26, 0x00                    ;   1: const 0
+                     mov       r6, r26                      ;   1:
+                     clr       r0                           ;   1: Mul 8
+L_MulMult_000122:    sbrc      r5, 0x00                     ; 1/3:
+                     add       r0, r6                       ;   1:
+                     lsl       r6                           ;   1:
+                     breq      L_MulDone_000123             ; 1/2:
+                     lsr       r5                           ;   1:
+                     brne      L_MulMult_000122             ; 1/2:
+L_MulDone_000123:    mov       r5, r0                       ;   1:
+                     ldi       r26, 0x01                    ;   1: const 1
+                     mov       r6, r26                      ;   1:
+                     sub       r5, r6                       ;   1: Sub8
+                     sub       r5, r4                       ;   1: Compare GT8
+                     brlt      L_GtTrue_000124              ; 1/2:  signed
+                     clr       r4                           ;   1:
+                     rjmp      L_GtOut_000125               ;   1:
+L_GtTrue_000124:     clr       r4                           ;   1:
+                     inc       r4                           ;   1:
+L_GtOut_000125:                                             ;    :
+                     ;      Expr end ------------           
+                     ; ==== Expr Statement ================ ; 
+                     ldd       r4, Y+1                      ;   2: c
+                     ldi       r26, 0x00                    ;   1: const 0
+                     mov       r5, r26                      ;   1:
+                     clr       r0                           ;   1: Mul 8
+L_MulMult_000126:    sbrc      r4, 0x00                     ; 1/3:
+                     add       r0, r5                       ;   1:
+                     lsl       r5                           ;   1:
+                     breq      L_MulDone_000127             ; 1/2:
+                     lsr       r4                           ;   1:
+                     brne      L_MulMult_000126             ; 1/2:
+L_MulDone_000127:    mov       r4, r0                       ;   1:
+                     ldi       r26, 0x01                    ;   1: const 1
+                     mov       r5, r26                      ;   1:
+                     sub       r4, r5                       ;   1: Sub8
+                     ldd       r5, Y+1                      ;   2: c
+                     ldi       r26, 0x00                    ;   1: const 0
+                     mov       r6, r26                      ;   1:
+                     clr       r0                           ;   1: Mul 8
+L_MulMult_000128:    sbrc      r5, 0x00                     ; 1/3:
+                     add       r0, r6                       ;   1:
+                     lsl       r6                           ;   1:
+                     breq      L_MulDone_000129             ; 1/2:
+                     lsr       r5                           ;   1:
+                     brne      L_MulMult_000128             ; 1/2:
+L_MulDone_000129:    mov       r5, r0                       ;   1:
+                     ldi       r26, 0x01                    ;   1: const 1
+                     mov       r6, r26                      ;   1:
+                     add       r5, r6                       ;   1: Add8
+                     sub       r5, r4                       ;   1: Compare GT8
+                     brlt      L_GtTrue_000130              ; 1/2:  signed
+                     clr       r4                           ;   1:
+                     rjmp      L_GtOut_000131               ;   1:
+L_GtTrue_000130:     clr       r4                           ;   1:
+                     inc       r4                           ;   1:
+L_GtOut_000131:                                             ;    :
+                     ;      Expr end ------------           
+                     ; ==== Expr Statement ================ ; 
+                     ldd       r4, Y+1                      ;   2: c
+                     ldi       r26, 0x00                    ;   1: const 0
+                     mov       r5, r26                      ;   1:
+                     clr       r0                           ;   1: Mul 8
+L_MulMult_000132:    sbrc      r4, 0x00                     ; 1/3:
+                     add       r0, r5                       ;   1:
+                     lsl       r5                           ;   1:
+                     breq      L_MulDone_000133             ; 1/2:
+                     lsr       r4                           ;   1:
+                     brne      L_MulMult_000132             ; 1/2:
+L_MulDone_000133:    mov       r4, r0                       ;   1:
+                     ldi       r26, 0x01                    ;   1: const 1
+                     mov       r5, r26                      ;   1:
+                     add       r4, r5                       ;   1: Add8
+                     mov       r0, r4                       ;   1: Signed extend by 1 bytes
+                     lsl       r0                           ;   1:
+                     clr       r0                           ;   1: 
+                     sbc       r0, r0                       ;   1:
+                     mov       r5, r0                       ;   1:
+                     ldd       r6, Y+1                      ;   2: c
+                     ldi       r26, 0x00                    ;   1: const 0
+                     mov       r7, r26                      ;   1:
+                     clr       r0                           ;   1: Mul 8
+L_MulMult_000134:    sbrc      r6, 0x00                     ; 1/3:
+                     add       r0, r7                       ;   1:
+                     lsl       r7                           ;   1:
+                     breq      L_MulDone_000135             ; 1/2:
+                     lsr       r6                           ;   1:
+                     brne      L_MulMult_000134             ; 1/2:
+L_MulDone_000135:    mov       r6, r0                       ;   1:
+                     ldi       r26, 0x01                    ;   1: const 1
+                     mov       r7, r26                      ;   1:
+                     sub       r6, r7                       ;   1: Sub8
+                     mov       r0, r6                       ;   1: Signed extend by 1 bytes
+                     lsl       r0                           ;   1:
+                     clr       r0                           ;   1: 
+                     sbc       r0, r0                       ;   1:
+                     mov       r7, r0                       ;   1:
+                     sub       r6, r4                       ;   1: Compare GT16
+                     sbc       r7, r5                       ;   1:
+                     brlo      L_GtTrue_000136              ; 1/2:  unsigned
+                     clr       r4                           ;   1:
+                     rjmp      L_GtOut_000137               ;   1:
+L_GtTrue_000136:     clr       r4                           ;   1:
+                     inc       r4                           ;   1:
+L_GtOut_000137:                                             ;    :
+                     ;      Expr end ------------           
+                     ; ==== Expr Statement ================ ; 
+                     ldi       r26, 0x01                    ;   1: const 1
+                     ldi       r27, 0x00                    ;   1:
+                     movw      r4, r26                      ;   1:
+                     ldi       r26, 0x01                    ;   1: const 1
+                     ldi       r27, 0x00                    ;   1:
+                     movw      r6, r26                      ;   1:
+                     sub       r6, r4                       ;   1: Compare LE16
+                     sbc       r7, r5                       ;   1:
+                     brge      L_LeTrue_000138              ; 1/2:  signed
+                     clr       r4                           ;   1:
+                     rjmp      L_LeOut_000139               ;   1:
+L_LeTrue_000138:     clr       r4                           ;   1:
+                     inc       r4                           ;   1:
+L_LeOut_000139:                                             ;    :
+                     ;      Expr end ------------           
+                     ; ==== Expr Statement ================ ; 
+                     ldi       r26, 0x01                    ;   1: const 1
+                     mov       r4, r26                      ;   1:
+                     ldi       r26, 0xff                    ;   1: const 255
+                     mov       r5, r26                      ;   1:
+                     sub       r5, r4                       ;   1: Compare LE8
+                     brge      L_LeTrue_000140              ; 1/2:  signed
+                     clr       r4                           ;   1:
+                     rjmp      L_LeOut_000141               ;   1:
+L_LeTrue_000140:     clr       r4                           ;   1:
+                     inc       r4                           ;   1:
+L_LeOut_000141:                                             ;    :
+                     ;      Expr end ------------           
+                     ; ==== Expr Statement ================ ; 
+                     ldi       r26, 0xff                    ;   1: const 255
+                     mov       r4, r26                      ;   1:
+                     ldi       r26, 0x01                    ;   1: const 1
+                     mov       r5, r26                      ;   1:
+                     sub       r5, r4                       ;   1: Compare LE8
+                     brge      L_LeTrue_000142              ; 1/2:  signed
+                     clr       r4                           ;   1:
+                     rjmp      L_LeOut_000143               ;   1:
+L_LeTrue_000142:     clr       r4                           ;   1:
+                     inc       r4                           ;   1:
+L_LeOut_000143:                                             ;    :
+                     ;      Expr end ------------           
+                     ; ==== Expr Statement ================ ; 
+                     ldd       r4, Y+1                      ;   2: c
+                     ldi       r26, 0x00                    ;   1: const 0
+                     mov       r5, r26                      ;   1:
+                     clr       r0                           ;   1: Mul 8
+L_MulMult_000144:    sbrc      r4, 0x00                     ; 1/3:
+                     add       r0, r5                       ;   1:
+                     lsl       r5                           ;   1:
+                     breq      L_MulDone_000145             ; 1/2:
+                     lsr       r4                           ;   1:
+                     brne      L_MulMult_000144             ; 1/2:
+L_MulDone_000145:    mov       r4, r0                       ;   1:
+                     ldi       r26, 0x01                    ;   1: const 1
+                     mov       r5, r26                      ;   1:
+                     add       r4, r5                       ;   1: Add8
+                     ldd       r5, Y+1                      ;   2: c
+                     ldi       r26, 0x00                    ;   1: const 0
+                     mov       r6, r26                      ;   1:
+                     clr       r0                           ;   1: Mul 8
+L_MulMult_000146:    sbrc      r5, 0x00                     ; 1/3:
+                     add       r0, r6                       ;   1:
+                     lsl       r6                           ;   1:
+                     breq      L_MulDone_000147             ; 1/2:
+                     lsr       r5                           ;   1:
+                     brne      L_MulMult_000146             ; 1/2:
+L_MulDone_000147:    mov       r5, r0                       ;   1:
+                     ldi       r26, 0x01                    ;   1: const 1
+                     mov       r6, r26                      ;   1:
+                     add       r5, r6                       ;   1: Add8
+                     sub       r5, r4                       ;   1: Compare LE8
+                     brge      L_LeTrue_000148              ; 1/2:  signed
+                     clr       r4                           ;   1:
+                     rjmp      L_LeOut_000149               ;   1:
+L_LeTrue_000148:     clr       r4                           ;   1:
+                     inc       r4                           ;   1:
+L_LeOut_000149:                                             ;    :
+                     ;      Expr end ------------           
+                     ; ==== Expr Statement ================ ; 
+                     ldd       r4, Y+1                      ;   2: c
+                     ldi       r26, 0x00                    ;   1: const 0
+                     mov       r5, r26                      ;   1:
+                     clr       r0                           ;   1: Mul 8
+L_MulMult_000150:    sbrc      r4, 0x00                     ; 1/3:
+                     add       r0, r5                       ;   1:
+                     lsl       r5                           ;   1:
+                     breq      L_MulDone_000151             ; 1/2:
+                     lsr       r4                           ;   1:
+                     brne      L_MulMult_000150             ; 1/2:
+L_MulDone_000151:    mov       r4, r0                       ;   1:
+                     ldi       r26, 0x01                    ;   1: const 1
+                     mov       r5, r26                      ;   1:
+                     add       r4, r5                       ;   1: Add8
+                     ldd       r5, Y+1                      ;   2: c
+                     ldi       r26, 0x00                    ;   1: const 0
+                     mov       r6, r26                      ;   1:
+                     clr       r0                           ;   1: Mul 8
+L_MulMult_000152:    sbrc      r5, 0x00                     ; 1/3:
+                     add       r0, r6                       ;   1:
+                     lsl       r6                           ;   1:
+                     breq      L_MulDone_000153             ; 1/2:
+                     lsr       r5                           ;   1:
+                     brne      L_MulMult_000152             ; 1/2:
+L_MulDone_000153:    mov       r5, r0                       ;   1:
+                     ldi       r26, 0x01                    ;   1: const 1
+                     mov       r6, r26                      ;   1:
+                     sub       r5, r6                       ;   1: Sub8
+                     sub       r5, r4                       ;   1: Compare LE8
+                     brge      L_LeTrue_000154              ; 1/2:  signed
+                     clr       r4                           ;   1:
+                     rjmp      L_LeOut_000155               ;   1:
+L_LeTrue_000154:     clr       r4                           ;   1:
+                     inc       r4                           ;   1:
+L_LeOut_000155:                                             ;    :
+                     ;      Expr end ------------           
+                     ; ==== Expr Statement ================ ; 
+                     ldd       r4, Y+1                      ;   2: c
+                     ldi       r26, 0x00                    ;   1: const 0
+                     mov       r5, r26                      ;   1:
+                     clr       r0                           ;   1: Mul 8
+L_MulMult_000156:    sbrc      r4, 0x00                     ; 1/3:
+                     add       r0, r5                       ;   1:
+                     lsl       r5                           ;   1:
+                     breq      L_MulDone_000157             ; 1/2:
+                     lsr       r4                           ;   1:
+                     brne      L_MulMult_000156             ; 1/2:
+L_MulDone_000157:    mov       r4, r0                       ;   1:
+                     ldi       r26, 0x01                    ;   1: const 1
+                     mov       r5, r26                      ;   1:
+                     sub       r4, r5                       ;   1: Sub8
+                     ldd       r5, Y+1                      ;   2: c
+                     ldi       r26, 0x00                    ;   1: const 0
+                     mov       r6, r26                      ;   1:
+                     clr       r0                           ;   1: Mul 8
+L_MulMult_000158:    sbrc      r5, 0x00                     ; 1/3:
+                     add       r0, r6                       ;   1:
+                     lsl       r6                           ;   1:
+                     breq      L_MulDone_000159             ; 1/2:
+                     lsr       r5                           ;   1:
+                     brne      L_MulMult_000158             ; 1/2:
+L_MulDone_000159:    mov       r5, r0                       ;   1:
+                     ldi       r26, 0x01                    ;   1: const 1
+                     mov       r6, r26                      ;   1:
+                     add       r5, r6                       ;   1: Add8
+                     sub       r5, r4                       ;   1: Compare LE8
+                     brge      L_LeTrue_000160              ; 1/2:  signed
+                     clr       r4                           ;   1:
+                     rjmp      L_LeOut_000161               ;   1:
+L_LeTrue_000160:     clr       r4                           ;   1:
+                     inc       r4                           ;   1:
+L_LeOut_000161:                                             ;    :
+                     ;      Expr end ------------           
+                     ; ==== Expr Statement ================ ; 
+                     ldd       r4, Y+1                      ;   2: c
+                     ldi       r26, 0x00                    ;   1: const 0
+                     mov       r5, r26                      ;   1:
+                     clr       r0                           ;   1: Mul 8
+L_MulMult_000162:    sbrc      r4, 0x00                     ; 1/3:
+                     add       r0, r5                       ;   1:
+                     lsl       r5                           ;   1:
+                     breq      L_MulDone_000163             ; 1/2:
+                     lsr       r4                           ;   1:
+                     brne      L_MulMult_000162             ; 1/2:
+L_MulDone_000163:    mov       r4, r0                       ;   1:
+                     ldi       r26, 0x01                    ;   1: const 1
+                     mov       r5, r26                      ;   1:
+                     add       r4, r5                       ;   1: Add8
+                     mov       r0, r4                       ;   1: Signed extend by 1 bytes
+                     lsl       r0                           ;   1:
+                     clr       r0                           ;   1: 
+                     sbc       r0, r0                       ;   1:
+                     mov       r5, r0                       ;   1:
+                     ldd       r6, Y+1                      ;   2: c
+                     ldi       r26, 0x00                    ;   1: const 0
+                     mov       r7, r26                      ;   1:
+                     clr       r0                           ;   1: Mul 8
+L_MulMult_000164:    sbrc      r6, 0x00                     ; 1/3:
+                     add       r0, r7                       ;   1:
+                     lsl       r7                           ;   1:
+                     breq      L_MulDone_000165             ; 1/2:
+                     lsr       r6                           ;   1:
+                     brne      L_MulMult_000164             ; 1/2:
+L_MulDone_000165:    mov       r6, r0                       ;   1:
+                     ldi       r26, 0x01                    ;   1: const 1
+                     mov       r7, r26                      ;   1:
+                     sub       r6, r7                       ;   1: Sub8
+                     mov       r0, r6                       ;   1: Signed extend by 1 bytes
+                     lsl       r0                           ;   1:
+                     clr       r0                           ;   1: 
+                     sbc       r0, r0                       ;   1:
+                     mov       r7, r0                       ;   1:
+                     sub       r6, r4                       ;   1: Compare LE16
+                     sbc       r7, r5                       ;   1:
+                     brsh      L_LeTrue_000166              ; 1/2:  unsigned
+                     clr       r4                           ;   1:
+                     rjmp      L_LeOut_000167               ;   1:
+L_LeTrue_000166:     clr       r4                           ;   1:
+                     inc       r4                           ;   1:
+L_LeOut_000167:                                             ;    :
+                     ;      Expr end ------------           
+                     ; ==== Expr Statement ================ ; 
+                     ldd       r4, Y+1                      ;   2: c
+                     ;      Expr end ------------           
+                     ;      Compound End --------           ; L_compound_Id_000001
+                     ; #### exit ################           ; 
+L_Exit_000000:       adiw      r28, 1                       ;   2: Y += sizeof(locals)
+                     out       _IO_SPH, r29                 ;   1: SP <- Y
+                     out       _IO_SPL, r28                 ;   1:
+                     pop       r28                          ;   2: FP <- preserved Frame
+                     pop       r29                          ;   2: 
+                     ret                                    ;   4: 
+                     
+         
+                            
+                     ;.endseg                               ; === End of TEXT segment ===
+
+
+
+                     .end                                   ; End of generated code.
+
+; eof

@@ -1,0 +1,1469 @@
+; SKC AVR Output - V1(Jan  4 2020)
+
+#define		_IO_SPL	0x3D
+#define		_IO_SPH	0x3E
+
+                                                            ; ##########################
+                                                            ; # Start of CONST segment #
+                     .section    CONST, "a"                 ; ##########################
+                     ;.endseg                               ; === End of CONST segment ===
+
+
+                                                            ; #########################
+                                                            ; # Start of INIT segment #
+                     .section    INIT,  "a"                 ; #########################
+                                                            ; This is the source of the initialization data
+                                                            ; #########################
+                     .section    .data                      ; # Start of DATA segment #
+                                                            ; #########################
+                                                            ; This is where the initialization data will be copied to
+                     ;.endseg                               ; === End of DATA segment ===
+
+
+                                                            ; ########################
+                     .section    .bss                       ; # Start of BSS segment #
+                                                            ; ########################
+                                                            ; Here starts the uninitialized data
+                     ;.endseg                               ; === End of BSS segment ===
+
+
+                                                            ; #########################
+                     .section    .text                      ; # Start of TEXT segment #
+                                                            ; #########################
+                                                            ; Here starts the executable code
+
+                     .global   Comparison
+Comparison:          ; ###########################################
+                     ; # Function: Comparison               
+                     ; #   Return: void                     
+                     ; #   Params: <none>                   
+                     ; #   CPU   : @Y+4, Return Address     
+                     ; #         : @Y+2, Preserved Frame Pointer
+                     ; #   Locals: @Y+1  , c  size=1 char , Class[_____]
+                     ; #         : sizeof(locals) = 1       
+                     ; ###########################################
+                     ; #### frame setup #########           ; 
+                     push      r29                          ;   2: (YH) preserve Frame
+                     push      r28                          ;   2: (YL)
+                     in        r29, _IO_SPH                 ;   1: FP <- SP
+                     in        r28, _IO_SPL                 ;   1:
+                     ; #### alloc locals ########           ; 
+                     sbiw      r28, 1                       ;   2: FP -= sizeof(locals))
+                     out       _IO_SPH, r29                 ;   1: SP <- FP
+                     out       _IO_SPL, r28                 ;   1:
+                     ; #### body text ###########           ; 
+                     ; ==== Compound Statement ============ ; L_compound_Id_000001
+                     ; ==== Expr Statement ================ ; 
+                     ldi       r20, 0x01                    ;   1: Immediate 1
+                     ldi       r21, 0x00                    ;   1:
+                     push      r20                          ;   2:
+                     push      r21                          ;   2:
+                     ldi       r20, 0x01                    ;   1: Immediate 1
+                     ldi       r21, 0x00                    ;   1:
+                     pop       r25                          ;   2:
+                     pop       r24                          ;   2:
+                     sub       r20, r24                     ;   1: Compare EQ 16
+                     sbc       r21, r25                     ;   1:
+                     breq      L_EqDone_000002              ;   1:
+                     ser       r20                          ;   1:
+L_EqDone_000002:     inc       r20                          ;   1:
+                     ;      Expr end ------------           
+                     ; ==== Expr Statement ================ ; 
+                     ldi       r20, 0x01                    ;   1: Immediate 1
+                     push      r20                          ;   2:
+                     ldi       r20, 0xff                    ;   1: Immediate 255
+                     pop       r24                          ;   2:
+                     sub       r20, r24                     ;   1: Compare EQ 8
+                     breq      L_EqDone_000003              ;   1:
+                     ser       r20                          ;   1:
+L_EqDone_000003:     inc       r20                          ;   1:
+                     ;      Expr end ------------           
+                     ; ==== Expr Statement ================ ; 
+                     ldi       r20, 0xff                    ;   1: Immediate 255
+                     push      r20                          ;   2:
+                     ldi       r20, 0x01                    ;   1: Immediate 1
+                     pop       r24                          ;   2:
+                     sub       r20, r24                     ;   1: Compare EQ 8
+                     breq      L_EqDone_000004              ;   1:
+                     ser       r20                          ;   1:
+L_EqDone_000004:     inc       r20                          ;   1:
+                     ;      Expr end ------------           
+                     ; ==== Expr Statement ================ ; 
+                     ldd       r20, Y+1                     ;   2: c
+                     push      r20                          ;   2:
+                     ldi       r20, 0x00                    ;   1: Immediate 0
+                     pop       r24                          ;   2:
+                     pop       r24                          ;   2: Mul 8
+                     clr       r0                           ;   1:
+L_MulMult_000005:    sbrc      r20, 0x00                    ; 1/3:
+                     add       r0, r24                      ;   1:
+                     lsl       r24                          ;   1:
+                     breq      L_MulDone_000006             ; 1/2:
+                     lsr       r20                          ;   1:
+                     brne      L_MulMult_000005             ; 1/2:
+L_MulDone_000006:    mov       r20, r0                      ;   1:
+                     push      r20                          ;   2:
+                     ldi       r20, 0x01                    ;   1: Immediate 1
+                     pop       r24                          ;   2:
+                     add       r20, r24                     ;   1: Add 8
+                     push      r20                          ;   2:
+                     ldd       r20, Y+1                     ;   2: c
+                     push      r20                          ;   2:
+                     ldi       r20, 0x00                    ;   1: Immediate 0
+                     pop       r24                          ;   2:
+                     pop       r24                          ;   2: Mul 8
+                     clr       r0                           ;   1:
+L_MulMult_000007:    sbrc      r20, 0x00                    ; 1/3:
+                     add       r0, r24                      ;   1:
+                     lsl       r24                          ;   1:
+                     breq      L_MulDone_000008             ; 1/2:
+                     lsr       r20                          ;   1:
+                     brne      L_MulMult_000007             ; 1/2:
+L_MulDone_000008:    mov       r20, r0                      ;   1:
+                     push      r20                          ;   2:
+                     ldi       r20, 0x01                    ;   1: Immediate 1
+                     pop       r24                          ;   2:
+                     add       r20, r24                     ;   1: Add 8
+                     pop       r24                          ;   2:
+                     sub       r20, r24                     ;   1: Compare EQ 8
+                     breq      L_EqDone_000009              ;   1:
+                     ser       r20                          ;   1:
+L_EqDone_000009:     inc       r20                          ;   1:
+                     ;      Expr end ------------           
+                     ; ==== Expr Statement ================ ; 
+                     ldd       r20, Y+1                     ;   2: c
+                     push      r20                          ;   2:
+                     ldi       r20, 0x00                    ;   1: Immediate 0
+                     pop       r24                          ;   2:
+                     pop       r24                          ;   2: Mul 8
+                     clr       r0                           ;   1:
+L_MulMult_000010:    sbrc      r20, 0x00                    ; 1/3:
+                     add       r0, r24                      ;   1:
+                     lsl       r24                          ;   1:
+                     breq      L_MulDone_000011             ; 1/2:
+                     lsr       r20                          ;   1:
+                     brne      L_MulMult_000010             ; 1/2:
+L_MulDone_000011:    mov       r20, r0                      ;   1:
+                     push      r20                          ;   2:
+                     ldi       r20, 0x01                    ;   1: Immediate 1
+                     pop       r24                          ;   2:
+                     add       r20, r24                     ;   1: Add 8
+                     push      r20                          ;   2:
+                     ldd       r20, Y+1                     ;   2: c
+                     push      r20                          ;   2:
+                     ldi       r20, 0x00                    ;   1: Immediate 0
+                     pop       r24                          ;   2:
+                     pop       r24                          ;   2: Mul 8
+                     clr       r0                           ;   1:
+L_MulMult_000012:    sbrc      r20, 0x00                    ; 1/3:
+                     add       r0, r24                      ;   1:
+                     lsl       r24                          ;   1:
+                     breq      L_MulDone_000013             ; 1/2:
+                     lsr       r20                          ;   1:
+                     brne      L_MulMult_000012             ; 1/2:
+L_MulDone_000013:    mov       r20, r0                      ;   1:
+                     push      r20                          ;   2:
+                     ldi       r20, 0x01                    ;   1: Immediate 1
+                     mov       r24, r20                     ;   1:
+                     pop       r20                          ;   2:
+                     sub       r20, r24                     ;   1: Sub 8
+                     pop       r24                          ;   2:
+                     sub       r20, r24                     ;   1: Compare EQ 8
+                     breq      L_EqDone_000014              ;   1:
+                     ser       r20                          ;   1:
+L_EqDone_000014:     inc       r20                          ;   1:
+                     ;      Expr end ------------           
+                     ; ==== Expr Statement ================ ; 
+                     ldd       r20, Y+1                     ;   2: c
+                     push      r20                          ;   2:
+                     ldi       r20, 0x00                    ;   1: Immediate 0
+                     pop       r24                          ;   2:
+                     pop       r24                          ;   2: Mul 8
+                     clr       r0                           ;   1:
+L_MulMult_000015:    sbrc      r20, 0x00                    ; 1/3:
+                     add       r0, r24                      ;   1:
+                     lsl       r24                          ;   1:
+                     breq      L_MulDone_000016             ; 1/2:
+                     lsr       r20                          ;   1:
+                     brne      L_MulMult_000015             ; 1/2:
+L_MulDone_000016:    mov       r20, r0                      ;   1:
+                     push      r20                          ;   2:
+                     ldi       r20, 0x01                    ;   1: Immediate 1
+                     mov       r24, r20                     ;   1:
+                     pop       r20                          ;   2:
+                     sub       r20, r24                     ;   1: Sub 8
+                     push      r20                          ;   2:
+                     ldd       r20, Y+1                     ;   2: c
+                     push      r20                          ;   2:
+                     ldi       r20, 0x00                    ;   1: Immediate 0
+                     pop       r24                          ;   2:
+                     pop       r24                          ;   2: Mul 8
+                     clr       r0                           ;   1:
+L_MulMult_000017:    sbrc      r20, 0x00                    ; 1/3:
+                     add       r0, r24                      ;   1:
+                     lsl       r24                          ;   1:
+                     breq      L_MulDone_000018             ; 1/2:
+                     lsr       r20                          ;   1:
+                     brne      L_MulMult_000017             ; 1/2:
+L_MulDone_000018:    mov       r20, r0                      ;   1:
+                     push      r20                          ;   2:
+                     ldi       r20, 0x01                    ;   1: Immediate 1
+                     pop       r24                          ;   2:
+                     add       r20, r24                     ;   1: Add 8
+                     pop       r24                          ;   2:
+                     sub       r20, r24                     ;   1: Compare EQ 8
+                     breq      L_EqDone_000019              ;   1:
+                     ser       r20                          ;   1:
+L_EqDone_000019:     inc       r20                          ;   1:
+                     ;      Expr end ------------           
+                     ; ==== Expr Statement ================ ; 
+                     ldd       r20, Y+1                     ;   2: c
+                     push      r20                          ;   2:
+                     ldi       r20, 0x00                    ;   1: Immediate 0
+                     pop       r24                          ;   2:
+                     pop       r24                          ;   2: Mul 8
+                     clr       r0                           ;   1:
+L_MulMult_000020:    sbrc      r20, 0x00                    ; 1/3:
+                     add       r0, r24                      ;   1:
+                     lsl       r24                          ;   1:
+                     breq      L_MulDone_000021             ; 1/2:
+                     lsr       r20                          ;   1:
+                     brne      L_MulMult_000020             ; 1/2:
+L_MulDone_000021:    mov       r20, r0                      ;   1:
+                     push      r20                          ;   2:
+                     ldi       r20, 0x01                    ;   1: Immediate 1
+                     pop       r24                          ;   2:
+                     add       r20, r24                     ;   1: Add 8
+                     mov       r21, r20                     ;   1: Signed extend 8 to 16 bits
+                     lsl       r21                          ;   1:
+                     clr       r21                          ;   1: 
+                     sbc       r21, r21                     ;   1:
+                     push      r20                          ;   2:
+                     push      r21                          ;   2:
+                     ldd       r20, Y+1                     ;   2: c
+                     push      r20                          ;   2:
+                     ldi       r20, 0x00                    ;   1: Immediate 0
+                     pop       r24                          ;   2:
+                     pop       r24                          ;   2: Mul 8
+                     clr       r0                           ;   1:
+L_MulMult_000022:    sbrc      r20, 0x00                    ; 1/3:
+                     add       r0, r24                      ;   1:
+                     lsl       r24                          ;   1:
+                     breq      L_MulDone_000023             ; 1/2:
+                     lsr       r20                          ;   1:
+                     brne      L_MulMult_000022             ; 1/2:
+L_MulDone_000023:    mov       r20, r0                      ;   1:
+                     push      r20                          ;   2:
+                     ldi       r20, 0x01                    ;   1: Immediate 1
+                     mov       r24, r20                     ;   1:
+                     pop       r20                          ;   2:
+                     sub       r20, r24                     ;   1: Sub 8
+                     mov       r21, r20                     ;   1: Signed extend 8 to 16 bits
+                     lsl       r21                          ;   1:
+                     clr       r21                          ;   1: 
+                     sbc       r21, r21                     ;   1:
+                     pop       r25                          ;   2:
+                     pop       r24                          ;   2:
+                     sub       r20, r24                     ;   1: Compare EQ 16
+                     sbc       r21, r25                     ;   1:
+                     breq      L_EqDone_000024              ;   1:
+                     ser       r20                          ;   1:
+L_EqDone_000024:     inc       r20                          ;   1:
+                     ;      Expr end ------------           
+                     ; ==== Expr Statement ================ ; 
+                     ldi       r20, 0x01                    ;   1: Immediate 1
+                     ldi       r21, 0x00                    ;   1:
+                     push      r20                          ;   2:
+                     push      r21                          ;   2:
+                     ldi       r20, 0x01                    ;   1: Immediate 1
+                     ldi       r21, 0x00                    ;   1:
+                     pop       r25                          ;   2:
+                     pop       r24                          ;   2:
+                     sub       r20, r24                     ;   1: Compare NE 16
+                     sbc       r21, r25                     ;   1:
+                     breq      L_NeDone_000025              ;   1:
+                     clr       r20                          ;   1:
+                     inc       r20                          ;   1:
+L_NeDone_000025:                                            ;    :
+                     ;      Expr end ------------           
+                     ; ==== Expr Statement ================ ; 
+                     ldi       r20, 0x01                    ;   1: Immediate 1
+                     push      r20                          ;   2:
+                     ldi       r20, 0xff                    ;   1: Immediate 255
+                     pop       r24                          ;   2:
+                     sub       r20, r24                     ;   1: Compare NE 8
+                     breq      L_NeDone_000026              ;   1:
+                     clr       r20                          ;   1:
+                     inc       r20                          ;   1:
+L_NeDone_000026:                                            ;    :
+                     ;      Expr end ------------           
+                     ; ==== Expr Statement ================ ; 
+                     ldi       r20, 0xff                    ;   1: Immediate 255
+                     push      r20                          ;   2:
+                     ldi       r20, 0x01                    ;   1: Immediate 1
+                     pop       r24                          ;   2:
+                     sub       r20, r24                     ;   1: Compare NE 8
+                     breq      L_NeDone_000027              ;   1:
+                     clr       r20                          ;   1:
+                     inc       r20                          ;   1:
+L_NeDone_000027:                                            ;    :
+                     ;      Expr end ------------           
+                     ; ==== Expr Statement ================ ; 
+                     ldd       r20, Y+1                     ;   2: c
+                     push      r20                          ;   2:
+                     ldi       r20, 0x00                    ;   1: Immediate 0
+                     pop       r24                          ;   2:
+                     pop       r24                          ;   2: Mul 8
+                     clr       r0                           ;   1:
+L_MulMult_000028:    sbrc      r20, 0x00                    ; 1/3:
+                     add       r0, r24                      ;   1:
+                     lsl       r24                          ;   1:
+                     breq      L_MulDone_000029             ; 1/2:
+                     lsr       r20                          ;   1:
+                     brne      L_MulMult_000028             ; 1/2:
+L_MulDone_000029:    mov       r20, r0                      ;   1:
+                     push      r20                          ;   2:
+                     ldi       r20, 0x01                    ;   1: Immediate 1
+                     pop       r24                          ;   2:
+                     add       r20, r24                     ;   1: Add 8
+                     push      r20                          ;   2:
+                     ldd       r20, Y+1                     ;   2: c
+                     push      r20                          ;   2:
+                     ldi       r20, 0x00                    ;   1: Immediate 0
+                     pop       r24                          ;   2:
+                     pop       r24                          ;   2: Mul 8
+                     clr       r0                           ;   1:
+L_MulMult_000030:    sbrc      r20, 0x00                    ; 1/3:
+                     add       r0, r24                      ;   1:
+                     lsl       r24                          ;   1:
+                     breq      L_MulDone_000031             ; 1/2:
+                     lsr       r20                          ;   1:
+                     brne      L_MulMult_000030             ; 1/2:
+L_MulDone_000031:    mov       r20, r0                      ;   1:
+                     push      r20                          ;   2:
+                     ldi       r20, 0x01                    ;   1: Immediate 1
+                     pop       r24                          ;   2:
+                     add       r20, r24                     ;   1: Add 8
+                     pop       r24                          ;   2:
+                     sub       r20, r24                     ;   1: Compare NE 8
+                     breq      L_NeDone_000032              ;   1:
+                     clr       r20                          ;   1:
+                     inc       r20                          ;   1:
+L_NeDone_000032:                                            ;    :
+                     ;      Expr end ------------           
+                     ; ==== Expr Statement ================ ; 
+                     ldd       r20, Y+1                     ;   2: c
+                     push      r20                          ;   2:
+                     ldi       r20, 0x00                    ;   1: Immediate 0
+                     pop       r24                          ;   2:
+                     pop       r24                          ;   2: Mul 8
+                     clr       r0                           ;   1:
+L_MulMult_000033:    sbrc      r20, 0x00                    ; 1/3:
+                     add       r0, r24                      ;   1:
+                     lsl       r24                          ;   1:
+                     breq      L_MulDone_000034             ; 1/2:
+                     lsr       r20                          ;   1:
+                     brne      L_MulMult_000033             ; 1/2:
+L_MulDone_000034:    mov       r20, r0                      ;   1:
+                     push      r20                          ;   2:
+                     ldi       r20, 0x01                    ;   1: Immediate 1
+                     pop       r24                          ;   2:
+                     add       r20, r24                     ;   1: Add 8
+                     push      r20                          ;   2:
+                     ldd       r20, Y+1                     ;   2: c
+                     push      r20                          ;   2:
+                     ldi       r20, 0x00                    ;   1: Immediate 0
+                     pop       r24                          ;   2:
+                     pop       r24                          ;   2: Mul 8
+                     clr       r0                           ;   1:
+L_MulMult_000035:    sbrc      r20, 0x00                    ; 1/3:
+                     add       r0, r24                      ;   1:
+                     lsl       r24                          ;   1:
+                     breq      L_MulDone_000036             ; 1/2:
+                     lsr       r20                          ;   1:
+                     brne      L_MulMult_000035             ; 1/2:
+L_MulDone_000036:    mov       r20, r0                      ;   1:
+                     push      r20                          ;   2:
+                     ldi       r20, 0x01                    ;   1: Immediate 1
+                     mov       r24, r20                     ;   1:
+                     pop       r20                          ;   2:
+                     sub       r20, r24                     ;   1: Sub 8
+                     pop       r24                          ;   2:
+                     sub       r20, r24                     ;   1: Compare NE 8
+                     breq      L_NeDone_000037              ;   1:
+                     clr       r20                          ;   1:
+                     inc       r20                          ;   1:
+L_NeDone_000037:                                            ;    :
+                     ;      Expr end ------------           
+                     ; ==== Expr Statement ================ ; 
+                     ldd       r20, Y+1                     ;   2: c
+                     push      r20                          ;   2:
+                     ldi       r20, 0x00                    ;   1: Immediate 0
+                     pop       r24                          ;   2:
+                     pop       r24                          ;   2: Mul 8
+                     clr       r0                           ;   1:
+L_MulMult_000038:    sbrc      r20, 0x00                    ; 1/3:
+                     add       r0, r24                      ;   1:
+                     lsl       r24                          ;   1:
+                     breq      L_MulDone_000039             ; 1/2:
+                     lsr       r20                          ;   1:
+                     brne      L_MulMult_000038             ; 1/2:
+L_MulDone_000039:    mov       r20, r0                      ;   1:
+                     push      r20                          ;   2:
+                     ldi       r20, 0x01                    ;   1: Immediate 1
+                     mov       r24, r20                     ;   1:
+                     pop       r20                          ;   2:
+                     sub       r20, r24                     ;   1: Sub 8
+                     push      r20                          ;   2:
+                     ldd       r20, Y+1                     ;   2: c
+                     push      r20                          ;   2:
+                     ldi       r20, 0x00                    ;   1: Immediate 0
+                     pop       r24                          ;   2:
+                     pop       r24                          ;   2: Mul 8
+                     clr       r0                           ;   1:
+L_MulMult_000040:    sbrc      r20, 0x00                    ; 1/3:
+                     add       r0, r24                      ;   1:
+                     lsl       r24                          ;   1:
+                     breq      L_MulDone_000041             ; 1/2:
+                     lsr       r20                          ;   1:
+                     brne      L_MulMult_000040             ; 1/2:
+L_MulDone_000041:    mov       r20, r0                      ;   1:
+                     push      r20                          ;   2:
+                     ldi       r20, 0x01                    ;   1: Immediate 1
+                     pop       r24                          ;   2:
+                     add       r20, r24                     ;   1: Add 8
+                     pop       r24                          ;   2:
+                     sub       r20, r24                     ;   1: Compare NE 8
+                     breq      L_NeDone_000042              ;   1:
+                     clr       r20                          ;   1:
+                     inc       r20                          ;   1:
+L_NeDone_000042:                                            ;    :
+                     ;      Expr end ------------           
+                     ; ==== Expr Statement ================ ; 
+                     ldd       r20, Y+1                     ;   2: c
+                     push      r20                          ;   2:
+                     ldi       r20, 0x00                    ;   1: Immediate 0
+                     pop       r24                          ;   2:
+                     pop       r24                          ;   2: Mul 8
+                     clr       r0                           ;   1:
+L_MulMult_000043:    sbrc      r20, 0x00                    ; 1/3:
+                     add       r0, r24                      ;   1:
+                     lsl       r24                          ;   1:
+                     breq      L_MulDone_000044             ; 1/2:
+                     lsr       r20                          ;   1:
+                     brne      L_MulMult_000043             ; 1/2:
+L_MulDone_000044:    mov       r20, r0                      ;   1:
+                     push      r20                          ;   2:
+                     ldi       r20, 0x01                    ;   1: Immediate 1
+                     pop       r24                          ;   2:
+                     add       r20, r24                     ;   1: Add 8
+                     mov       r21, r20                     ;   1: Signed extend 8 to 16 bits
+                     lsl       r21                          ;   1:
+                     clr       r21                          ;   1: 
+                     sbc       r21, r21                     ;   1:
+                     push      r20                          ;   2:
+                     push      r21                          ;   2:
+                     ldd       r20, Y+1                     ;   2: c
+                     push      r20                          ;   2:
+                     ldi       r20, 0x00                    ;   1: Immediate 0
+                     pop       r24                          ;   2:
+                     pop       r24                          ;   2: Mul 8
+                     clr       r0                           ;   1:
+L_MulMult_000045:    sbrc      r20, 0x00                    ; 1/3:
+                     add       r0, r24                      ;   1:
+                     lsl       r24                          ;   1:
+                     breq      L_MulDone_000046             ; 1/2:
+                     lsr       r20                          ;   1:
+                     brne      L_MulMult_000045             ; 1/2:
+L_MulDone_000046:    mov       r20, r0                      ;   1:
+                     push      r20                          ;   2:
+                     ldi       r20, 0x01                    ;   1: Immediate 1
+                     mov       r24, r20                     ;   1:
+                     pop       r20                          ;   2:
+                     sub       r20, r24                     ;   1: Sub 8
+                     mov       r21, r20                     ;   1: Signed extend 8 to 16 bits
+                     lsl       r21                          ;   1:
+                     clr       r21                          ;   1: 
+                     sbc       r21, r21                     ;   1:
+                     pop       r25                          ;   2:
+                     pop       r24                          ;   2:
+                     sub       r20, r24                     ;   1: Compare NE 16
+                     sbc       r21, r25                     ;   1:
+                     breq      L_NeDone_000047              ;   1:
+                     clr       r20                          ;   1:
+                     inc       r20                          ;   1:
+L_NeDone_000047:                                            ;    :
+                     ;      Expr end ------------           
+                     ; ==== Expr Statement ================ ; 
+                     ldi       r20, 0x01                    ;   1: Immediate 1
+                     ldi       r21, 0x00                    ;   1:
+                     push      r20                          ;   2:
+                     push      r21                          ;   2:
+                     ldi       r20, 0x01                    ;   1: Immediate 1
+                     ldi       r21, 0x00                    ;   1:
+                     pop       r25                          ;   2:
+                     pop       r24                          ;   2:
+                     sub       r20, r24                     ;   1: Compare LT 16
+                     sbc       r21, r25                     ;   1:
+                     brlt      L_LtTrue_000048              ; 1/2:  signed
+                     clr       r20                          ;   1:
+                     rjmp      L_LtOut_000049               ;   1:
+L_LtTrue_000048:     clr       r20                          ;   1:
+                     inc       r20                          ;   1:
+L_LtOut_000049:                                             ;    :
+                     ;      Expr end ------------           
+                     ; ==== Expr Statement ================ ; 
+                     ldi       r20, 0x01                    ;   1: Immediate 1
+                     push      r20                          ;   2:
+                     ldi       r20, 0xff                    ;   1: Immediate 255
+                     pop       r24                          ;   2:
+                     sub       r20, r24                     ;   1: Compare LT 8
+                     brlt      L_LtTrue_000050              ; 1/2:  signed
+                     clr       r20                          ;   1:
+                     rjmp      L_LtOut_000051               ;   1:
+L_LtTrue_000050:     clr       r20                          ;   1:
+                     inc       r20                          ;   1:
+L_LtOut_000051:                                             ;    :
+                     ;      Expr end ------------           
+                     ; ==== Expr Statement ================ ; 
+                     ldi       r20, 0xff                    ;   1: Immediate 255
+                     push      r20                          ;   2:
+                     ldi       r20, 0x01                    ;   1: Immediate 1
+                     pop       r24                          ;   2:
+                     sub       r20, r24                     ;   1: Compare LT 8
+                     brlt      L_LtTrue_000052              ; 1/2:  signed
+                     clr       r20                          ;   1:
+                     rjmp      L_LtOut_000053               ;   1:
+L_LtTrue_000052:     clr       r20                          ;   1:
+                     inc       r20                          ;   1:
+L_LtOut_000053:                                             ;    :
+                     ;      Expr end ------------           
+                     ; ==== Expr Statement ================ ; 
+                     ldd       r20, Y+1                     ;   2: c
+                     push      r20                          ;   2:
+                     ldi       r20, 0x00                    ;   1: Immediate 0
+                     pop       r24                          ;   2:
+                     pop       r24                          ;   2: Mul 8
+                     clr       r0                           ;   1:
+L_MulMult_000054:    sbrc      r20, 0x00                    ; 1/3:
+                     add       r0, r24                      ;   1:
+                     lsl       r24                          ;   1:
+                     breq      L_MulDone_000055             ; 1/2:
+                     lsr       r20                          ;   1:
+                     brne      L_MulMult_000054             ; 1/2:
+L_MulDone_000055:    mov       r20, r0                      ;   1:
+                     push      r20                          ;   2:
+                     ldi       r20, 0x01                    ;   1: Immediate 1
+                     pop       r24                          ;   2:
+                     add       r20, r24                     ;   1: Add 8
+                     push      r20                          ;   2:
+                     ldd       r20, Y+1                     ;   2: c
+                     push      r20                          ;   2:
+                     ldi       r20, 0x00                    ;   1: Immediate 0
+                     pop       r24                          ;   2:
+                     pop       r24                          ;   2: Mul 8
+                     clr       r0                           ;   1:
+L_MulMult_000056:    sbrc      r20, 0x00                    ; 1/3:
+                     add       r0, r24                      ;   1:
+                     lsl       r24                          ;   1:
+                     breq      L_MulDone_000057             ; 1/2:
+                     lsr       r20                          ;   1:
+                     brne      L_MulMult_000056             ; 1/2:
+L_MulDone_000057:    mov       r20, r0                      ;   1:
+                     push      r20                          ;   2:
+                     ldi       r20, 0x01                    ;   1: Immediate 1
+                     pop       r24                          ;   2:
+                     add       r20, r24                     ;   1: Add 8
+                     pop       r24                          ;   2:
+                     sub       r20, r24                     ;   1: Compare LT 8
+                     brlt      L_LtTrue_000058              ; 1/2:  signed
+                     clr       r20                          ;   1:
+                     rjmp      L_LtOut_000059               ;   1:
+L_LtTrue_000058:     clr       r20                          ;   1:
+                     inc       r20                          ;   1:
+L_LtOut_000059:                                             ;    :
+                     ;      Expr end ------------           
+                     ; ==== Expr Statement ================ ; 
+                     ldd       r20, Y+1                     ;   2: c
+                     push      r20                          ;   2:
+                     ldi       r20, 0x00                    ;   1: Immediate 0
+                     pop       r24                          ;   2:
+                     pop       r24                          ;   2: Mul 8
+                     clr       r0                           ;   1:
+L_MulMult_000060:    sbrc      r20, 0x00                    ; 1/3:
+                     add       r0, r24                      ;   1:
+                     lsl       r24                          ;   1:
+                     breq      L_MulDone_000061             ; 1/2:
+                     lsr       r20                          ;   1:
+                     brne      L_MulMult_000060             ; 1/2:
+L_MulDone_000061:    mov       r20, r0                      ;   1:
+                     push      r20                          ;   2:
+                     ldi       r20, 0x01                    ;   1: Immediate 1
+                     pop       r24                          ;   2:
+                     add       r20, r24                     ;   1: Add 8
+                     push      r20                          ;   2:
+                     ldd       r20, Y+1                     ;   2: c
+                     push      r20                          ;   2:
+                     ldi       r20, 0x00                    ;   1: Immediate 0
+                     pop       r24                          ;   2:
+                     pop       r24                          ;   2: Mul 8
+                     clr       r0                           ;   1:
+L_MulMult_000062:    sbrc      r20, 0x00                    ; 1/3:
+                     add       r0, r24                      ;   1:
+                     lsl       r24                          ;   1:
+                     breq      L_MulDone_000063             ; 1/2:
+                     lsr       r20                          ;   1:
+                     brne      L_MulMult_000062             ; 1/2:
+L_MulDone_000063:    mov       r20, r0                      ;   1:
+                     push      r20                          ;   2:
+                     ldi       r20, 0x01                    ;   1: Immediate 1
+                     mov       r24, r20                     ;   1:
+                     pop       r20                          ;   2:
+                     sub       r20, r24                     ;   1: Sub 8
+                     pop       r24                          ;   2:
+                     sub       r20, r24                     ;   1: Compare LT 8
+                     brlt      L_LtTrue_000064              ; 1/2:  signed
+                     clr       r20                          ;   1:
+                     rjmp      L_LtOut_000065               ;   1:
+L_LtTrue_000064:     clr       r20                          ;   1:
+                     inc       r20                          ;   1:
+L_LtOut_000065:                                             ;    :
+                     ;      Expr end ------------           
+                     ; ==== Expr Statement ================ ; 
+                     ldd       r20, Y+1                     ;   2: c
+                     push      r20                          ;   2:
+                     ldi       r20, 0x00                    ;   1: Immediate 0
+                     pop       r24                          ;   2:
+                     pop       r24                          ;   2: Mul 8
+                     clr       r0                           ;   1:
+L_MulMult_000066:    sbrc      r20, 0x00                    ; 1/3:
+                     add       r0, r24                      ;   1:
+                     lsl       r24                          ;   1:
+                     breq      L_MulDone_000067             ; 1/2:
+                     lsr       r20                          ;   1:
+                     brne      L_MulMult_000066             ; 1/2:
+L_MulDone_000067:    mov       r20, r0                      ;   1:
+                     push      r20                          ;   2:
+                     ldi       r20, 0x01                    ;   1: Immediate 1
+                     mov       r24, r20                     ;   1:
+                     pop       r20                          ;   2:
+                     sub       r20, r24                     ;   1: Sub 8
+                     push      r20                          ;   2:
+                     ldd       r20, Y+1                     ;   2: c
+                     push      r20                          ;   2:
+                     ldi       r20, 0x00                    ;   1: Immediate 0
+                     pop       r24                          ;   2:
+                     pop       r24                          ;   2: Mul 8
+                     clr       r0                           ;   1:
+L_MulMult_000068:    sbrc      r20, 0x00                    ; 1/3:
+                     add       r0, r24                      ;   1:
+                     lsl       r24                          ;   1:
+                     breq      L_MulDone_000069             ; 1/2:
+                     lsr       r20                          ;   1:
+                     brne      L_MulMult_000068             ; 1/2:
+L_MulDone_000069:    mov       r20, r0                      ;   1:
+                     push      r20                          ;   2:
+                     ldi       r20, 0x01                    ;   1: Immediate 1
+                     pop       r24                          ;   2:
+                     add       r20, r24                     ;   1: Add 8
+                     pop       r24                          ;   2:
+                     sub       r20, r24                     ;   1: Compare LT 8
+                     brlt      L_LtTrue_000070              ; 1/2:  signed
+                     clr       r20                          ;   1:
+                     rjmp      L_LtOut_000071               ;   1:
+L_LtTrue_000070:     clr       r20                          ;   1:
+                     inc       r20                          ;   1:
+L_LtOut_000071:                                             ;    :
+                     ;      Expr end ------------           
+                     ; ==== Expr Statement ================ ; 
+                     ldd       r20, Y+1                     ;   2: c
+                     push      r20                          ;   2:
+                     ldi       r20, 0x00                    ;   1: Immediate 0
+                     pop       r24                          ;   2:
+                     pop       r24                          ;   2: Mul 8
+                     clr       r0                           ;   1:
+L_MulMult_000072:    sbrc      r20, 0x00                    ; 1/3:
+                     add       r0, r24                      ;   1:
+                     lsl       r24                          ;   1:
+                     breq      L_MulDone_000073             ; 1/2:
+                     lsr       r20                          ;   1:
+                     brne      L_MulMult_000072             ; 1/2:
+L_MulDone_000073:    mov       r20, r0                      ;   1:
+                     push      r20                          ;   2:
+                     ldi       r20, 0x01                    ;   1: Immediate 1
+                     pop       r24                          ;   2:
+                     add       r20, r24                     ;   1: Add 8
+                     mov       r21, r20                     ;   1: Signed extend 8 to 16 bits
+                     lsl       r21                          ;   1:
+                     clr       r21                          ;   1: 
+                     sbc       r21, r21                     ;   1:
+                     push      r20                          ;   2:
+                     push      r21                          ;   2:
+                     ldd       r20, Y+1                     ;   2: c
+                     push      r20                          ;   2:
+                     ldi       r20, 0x00                    ;   1: Immediate 0
+                     pop       r24                          ;   2:
+                     pop       r24                          ;   2: Mul 8
+                     clr       r0                           ;   1:
+L_MulMult_000074:    sbrc      r20, 0x00                    ; 1/3:
+                     add       r0, r24                      ;   1:
+                     lsl       r24                          ;   1:
+                     breq      L_MulDone_000075             ; 1/2:
+                     lsr       r20                          ;   1:
+                     brne      L_MulMult_000074             ; 1/2:
+L_MulDone_000075:    mov       r20, r0                      ;   1:
+                     push      r20                          ;   2:
+                     ldi       r20, 0x01                    ;   1: Immediate 1
+                     mov       r24, r20                     ;   1:
+                     pop       r20                          ;   2:
+                     sub       r20, r24                     ;   1: Sub 8
+                     mov       r21, r20                     ;   1: Signed extend 8 to 16 bits
+                     lsl       r21                          ;   1:
+                     clr       r21                          ;   1: 
+                     sbc       r21, r21                     ;   1:
+                     pop       r25                          ;   2:
+                     pop       r24                          ;   2:
+                     sub       r20, r24                     ;   1: Compare LT 16
+                     sbc       r21, r25                     ;   1:
+                     brlo      L_LtTrue_000076              ; 1/2:  unsigned
+                     clr       r20                          ;   1:
+                     rjmp      L_LtOut_000077               ;   1:
+L_LtTrue_000076:     clr       r20                          ;   1:
+                     inc       r20                          ;   1:
+L_LtOut_000077:                                             ;    :
+                     ;      Expr end ------------           
+                     ; ==== Expr Statement ================ ; 
+                     ldi       r20, 0x01                    ;   1: Immediate 1
+                     ldi       r21, 0x00                    ;   1:
+                     push      r20                          ;   2:
+                     push      r21                          ;   2:
+                     ldi       r20, 0x01                    ;   1: Immediate 1
+                     ldi       r21, 0x00                    ;   1:
+                     pop       r25                          ;   2:
+                     pop       r24                          ;   2:
+                     sub       r20, r24                     ;   1: Compare GE 16
+                     sbc       r21, r25                     ;   1:
+                     brge      L_GeTrue_000078              ; 1/2:  signed
+                     clr       r20                          ;   1:
+                     rjmp      L_GeOut_000079               ;   2:
+L_GeTrue_000078:     clr       r20                          ;   1:
+                     inc       r20                          ;   1:
+L_GeOut_000079:                                             ;    :
+                     ;      Expr end ------------           
+                     ; ==== Expr Statement ================ ; 
+                     ldi       r20, 0x01                    ;   1: Immediate 1
+                     push      r20                          ;   2:
+                     ldi       r20, 0xff                    ;   1: Immediate 255
+                     pop       r24                          ;   2:
+                     sub       r20, r24                     ;   1: Compare GE 8
+                     brge      L_GeTrue_000080              ; 1/2:  signed
+                     clr       r20                          ;   1:
+                     rjmp      L_GeOut_000081               ;   2:
+L_GeTrue_000080:     clr       r20                          ;   1:
+                     inc       r20                          ;   1:
+L_GeOut_000081:                                             ;    :
+                     ;      Expr end ------------           
+                     ; ==== Expr Statement ================ ; 
+                     ldi       r20, 0xff                    ;   1: Immediate 255
+                     push      r20                          ;   2:
+                     ldi       r20, 0x01                    ;   1: Immediate 1
+                     pop       r24                          ;   2:
+                     sub       r20, r24                     ;   1: Compare GE 8
+                     brge      L_GeTrue_000082              ; 1/2:  signed
+                     clr       r20                          ;   1:
+                     rjmp      L_GeOut_000083               ;   2:
+L_GeTrue_000082:     clr       r20                          ;   1:
+                     inc       r20                          ;   1:
+L_GeOut_000083:                                             ;    :
+                     ;      Expr end ------------           
+                     ; ==== Expr Statement ================ ; 
+                     ldd       r20, Y+1                     ;   2: c
+                     push      r20                          ;   2:
+                     ldi       r20, 0x00                    ;   1: Immediate 0
+                     pop       r24                          ;   2:
+                     pop       r24                          ;   2: Mul 8
+                     clr       r0                           ;   1:
+L_MulMult_000084:    sbrc      r20, 0x00                    ; 1/3:
+                     add       r0, r24                      ;   1:
+                     lsl       r24                          ;   1:
+                     breq      L_MulDone_000085             ; 1/2:
+                     lsr       r20                          ;   1:
+                     brne      L_MulMult_000084             ; 1/2:
+L_MulDone_000085:    mov       r20, r0                      ;   1:
+                     push      r20                          ;   2:
+                     ldi       r20, 0x01                    ;   1: Immediate 1
+                     pop       r24                          ;   2:
+                     add       r20, r24                     ;   1: Add 8
+                     push      r20                          ;   2:
+                     ldd       r20, Y+1                     ;   2: c
+                     push      r20                          ;   2:
+                     ldi       r20, 0x00                    ;   1: Immediate 0
+                     pop       r24                          ;   2:
+                     pop       r24                          ;   2: Mul 8
+                     clr       r0                           ;   1:
+L_MulMult_000086:    sbrc      r20, 0x00                    ; 1/3:
+                     add       r0, r24                      ;   1:
+                     lsl       r24                          ;   1:
+                     breq      L_MulDone_000087             ; 1/2:
+                     lsr       r20                          ;   1:
+                     brne      L_MulMult_000086             ; 1/2:
+L_MulDone_000087:    mov       r20, r0                      ;   1:
+                     push      r20                          ;   2:
+                     ldi       r20, 0x01                    ;   1: Immediate 1
+                     pop       r24                          ;   2:
+                     add       r20, r24                     ;   1: Add 8
+                     pop       r24                          ;   2:
+                     sub       r20, r24                     ;   1: Compare GE 8
+                     brge      L_GeTrue_000088              ; 1/2:  signed
+                     clr       r20                          ;   1:
+                     rjmp      L_GeOut_000089               ;   2:
+L_GeTrue_000088:     clr       r20                          ;   1:
+                     inc       r20                          ;   1:
+L_GeOut_000089:                                             ;    :
+                     ;      Expr end ------------           
+                     ; ==== Expr Statement ================ ; 
+                     ldd       r20, Y+1                     ;   2: c
+                     push      r20                          ;   2:
+                     ldi       r20, 0x00                    ;   1: Immediate 0
+                     pop       r24                          ;   2:
+                     pop       r24                          ;   2: Mul 8
+                     clr       r0                           ;   1:
+L_MulMult_000090:    sbrc      r20, 0x00                    ; 1/3:
+                     add       r0, r24                      ;   1:
+                     lsl       r24                          ;   1:
+                     breq      L_MulDone_000091             ; 1/2:
+                     lsr       r20                          ;   1:
+                     brne      L_MulMult_000090             ; 1/2:
+L_MulDone_000091:    mov       r20, r0                      ;   1:
+                     push      r20                          ;   2:
+                     ldi       r20, 0x01                    ;   1: Immediate 1
+                     pop       r24                          ;   2:
+                     add       r20, r24                     ;   1: Add 8
+                     push      r20                          ;   2:
+                     ldd       r20, Y+1                     ;   2: c
+                     push      r20                          ;   2:
+                     ldi       r20, 0x00                    ;   1: Immediate 0
+                     pop       r24                          ;   2:
+                     pop       r24                          ;   2: Mul 8
+                     clr       r0                           ;   1:
+L_MulMult_000092:    sbrc      r20, 0x00                    ; 1/3:
+                     add       r0, r24                      ;   1:
+                     lsl       r24                          ;   1:
+                     breq      L_MulDone_000093             ; 1/2:
+                     lsr       r20                          ;   1:
+                     brne      L_MulMult_000092             ; 1/2:
+L_MulDone_000093:    mov       r20, r0                      ;   1:
+                     push      r20                          ;   2:
+                     ldi       r20, 0x01                    ;   1: Immediate 1
+                     mov       r24, r20                     ;   1:
+                     pop       r20                          ;   2:
+                     sub       r20, r24                     ;   1: Sub 8
+                     pop       r24                          ;   2:
+                     sub       r20, r24                     ;   1: Compare GE 8
+                     brge      L_GeTrue_000094              ; 1/2:  signed
+                     clr       r20                          ;   1:
+                     rjmp      L_GeOut_000095               ;   2:
+L_GeTrue_000094:     clr       r20                          ;   1:
+                     inc       r20                          ;   1:
+L_GeOut_000095:                                             ;    :
+                     ;      Expr end ------------           
+                     ; ==== Expr Statement ================ ; 
+                     ldd       r20, Y+1                     ;   2: c
+                     push      r20                          ;   2:
+                     ldi       r20, 0x00                    ;   1: Immediate 0
+                     pop       r24                          ;   2:
+                     pop       r24                          ;   2: Mul 8
+                     clr       r0                           ;   1:
+L_MulMult_000096:    sbrc      r20, 0x00                    ; 1/3:
+                     add       r0, r24                      ;   1:
+                     lsl       r24                          ;   1:
+                     breq      L_MulDone_000097             ; 1/2:
+                     lsr       r20                          ;   1:
+                     brne      L_MulMult_000096             ; 1/2:
+L_MulDone_000097:    mov       r20, r0                      ;   1:
+                     push      r20                          ;   2:
+                     ldi       r20, 0x01                    ;   1: Immediate 1
+                     mov       r24, r20                     ;   1:
+                     pop       r20                          ;   2:
+                     sub       r20, r24                     ;   1: Sub 8
+                     push      r20                          ;   2:
+                     ldd       r20, Y+1                     ;   2: c
+                     push      r20                          ;   2:
+                     ldi       r20, 0x00                    ;   1: Immediate 0
+                     pop       r24                          ;   2:
+                     pop       r24                          ;   2: Mul 8
+                     clr       r0                           ;   1:
+L_MulMult_000098:    sbrc      r20, 0x00                    ; 1/3:
+                     add       r0, r24                      ;   1:
+                     lsl       r24                          ;   1:
+                     breq      L_MulDone_000099             ; 1/2:
+                     lsr       r20                          ;   1:
+                     brne      L_MulMult_000098             ; 1/2:
+L_MulDone_000099:    mov       r20, r0                      ;   1:
+                     push      r20                          ;   2:
+                     ldi       r20, 0x01                    ;   1: Immediate 1
+                     pop       r24                          ;   2:
+                     add       r20, r24                     ;   1: Add 8
+                     pop       r24                          ;   2:
+                     sub       r20, r24                     ;   1: Compare GE 8
+                     brge      L_GeTrue_000100              ; 1/2:  signed
+                     clr       r20                          ;   1:
+                     rjmp      L_GeOut_000101               ;   2:
+L_GeTrue_000100:     clr       r20                          ;   1:
+                     inc       r20                          ;   1:
+L_GeOut_000101:                                             ;    :
+                     ;      Expr end ------------           
+                     ; ==== Expr Statement ================ ; 
+                     ldd       r20, Y+1                     ;   2: c
+                     push      r20                          ;   2:
+                     ldi       r20, 0x00                    ;   1: Immediate 0
+                     pop       r24                          ;   2:
+                     pop       r24                          ;   2: Mul 8
+                     clr       r0                           ;   1:
+L_MulMult_000102:    sbrc      r20, 0x00                    ; 1/3:
+                     add       r0, r24                      ;   1:
+                     lsl       r24                          ;   1:
+                     breq      L_MulDone_000103             ; 1/2:
+                     lsr       r20                          ;   1:
+                     brne      L_MulMult_000102             ; 1/2:
+L_MulDone_000103:    mov       r20, r0                      ;   1:
+                     push      r20                          ;   2:
+                     ldi       r20, 0x01                    ;   1: Immediate 1
+                     pop       r24                          ;   2:
+                     add       r20, r24                     ;   1: Add 8
+                     mov       r21, r20                     ;   1: Signed extend 8 to 16 bits
+                     lsl       r21                          ;   1:
+                     clr       r21                          ;   1: 
+                     sbc       r21, r21                     ;   1:
+                     push      r20                          ;   2:
+                     push      r21                          ;   2:
+                     ldd       r20, Y+1                     ;   2: c
+                     push      r20                          ;   2:
+                     ldi       r20, 0x00                    ;   1: Immediate 0
+                     pop       r24                          ;   2:
+                     pop       r24                          ;   2: Mul 8
+                     clr       r0                           ;   1:
+L_MulMult_000104:    sbrc      r20, 0x00                    ; 1/3:
+                     add       r0, r24                      ;   1:
+                     lsl       r24                          ;   1:
+                     breq      L_MulDone_000105             ; 1/2:
+                     lsr       r20                          ;   1:
+                     brne      L_MulMult_000104             ; 1/2:
+L_MulDone_000105:    mov       r20, r0                      ;   1:
+                     push      r20                          ;   2:
+                     ldi       r20, 0x01                    ;   1: Immediate 1
+                     mov       r24, r20                     ;   1:
+                     pop       r20                          ;   2:
+                     sub       r20, r24                     ;   1: Sub 8
+                     mov       r21, r20                     ;   1: Signed extend 8 to 16 bits
+                     lsl       r21                          ;   1:
+                     clr       r21                          ;   1: 
+                     sbc       r21, r21                     ;   1:
+                     pop       r25                          ;   2:
+                     pop       r24                          ;   2:
+                     sub       r20, r24                     ;   1: Compare GE 16
+                     sbc       r21, r25                     ;   1:
+                     brsh      L_GeTrue_000106              ; 1/2:  unsigned
+                     clr       r20                          ;   1:
+                     rjmp      L_GeOut_000107               ;   2:
+L_GeTrue_000106:     clr       r20                          ;   1:
+                     inc       r20                          ;   1:
+L_GeOut_000107:                                             ;    :
+                     ;      Expr end ------------           
+                     ; ==== Expr Statement ================ ; 
+                     ldi       r20, 0x01                    ;   1: Immediate 1
+                     ldi       r21, 0x00                    ;   1:
+                     push      r20                          ;   2:
+                     push      r21                          ;   2:
+                     ldi       r20, 0x01                    ;   1: Immediate 1
+                     ldi       r21, 0x00                    ;   1:
+                     pop       r25                          ;   2:
+                     pop       r24                          ;   2:
+                     sub       r20, r24                     ;   1: Compare GT 16
+                     sbc       r21, r25                     ;   1:
+                     brlt      L_GtTrue_000108              ; 1/2:  signed
+                     clr       r20                          ;   1:
+                     rjmp      L_GtOut_000109               ;   2:
+L_GtTrue_000108:     clr       r20                          ;   1:
+                     inc       r20                          ;   1:
+L_GtOut_000109:                                             ;    :
+                     ;      Expr end ------------           
+                     ; ==== Expr Statement ================ ; 
+                     ldi       r20, 0x01                    ;   1: Immediate 1
+                     push      r20                          ;   2:
+                     ldi       r20, 0xff                    ;   1: Immediate 255
+                     pop       r24                          ;   2:
+                     sub       r20, r24                     ;   1: Compare GT 8
+                     brlt      L_GtTrue_000110              ; 1/2:  signed
+                     clr       r20                          ;   1:
+                     rjmp      L_GtOut_000111               ;   2:
+L_GtTrue_000110:     clr       r20                          ;   1:
+                     inc       r20                          ;   1:
+L_GtOut_000111:                                             ;    :
+                     ;      Expr end ------------           
+                     ; ==== Expr Statement ================ ; 
+                     ldi       r20, 0xff                    ;   1: Immediate 255
+                     push      r20                          ;   2:
+                     ldi       r20, 0x01                    ;   1: Immediate 1
+                     pop       r24                          ;   2:
+                     sub       r20, r24                     ;   1: Compare GT 8
+                     brlt      L_GtTrue_000112              ; 1/2:  signed
+                     clr       r20                          ;   1:
+                     rjmp      L_GtOut_000113               ;   2:
+L_GtTrue_000112:     clr       r20                          ;   1:
+                     inc       r20                          ;   1:
+L_GtOut_000113:                                             ;    :
+                     ;      Expr end ------------           
+                     ; ==== Expr Statement ================ ; 
+                     ldd       r20, Y+1                     ;   2: c
+                     push      r20                          ;   2:
+                     ldi       r20, 0x00                    ;   1: Immediate 0
+                     pop       r24                          ;   2:
+                     pop       r24                          ;   2: Mul 8
+                     clr       r0                           ;   1:
+L_MulMult_000114:    sbrc      r20, 0x00                    ; 1/3:
+                     add       r0, r24                      ;   1:
+                     lsl       r24                          ;   1:
+                     breq      L_MulDone_000115             ; 1/2:
+                     lsr       r20                          ;   1:
+                     brne      L_MulMult_000114             ; 1/2:
+L_MulDone_000115:    mov       r20, r0                      ;   1:
+                     push      r20                          ;   2:
+                     ldi       r20, 0x01                    ;   1: Immediate 1
+                     pop       r24                          ;   2:
+                     add       r20, r24                     ;   1: Add 8
+                     push      r20                          ;   2:
+                     ldd       r20, Y+1                     ;   2: c
+                     push      r20                          ;   2:
+                     ldi       r20, 0x00                    ;   1: Immediate 0
+                     pop       r24                          ;   2:
+                     pop       r24                          ;   2: Mul 8
+                     clr       r0                           ;   1:
+L_MulMult_000116:    sbrc      r20, 0x00                    ; 1/3:
+                     add       r0, r24                      ;   1:
+                     lsl       r24                          ;   1:
+                     breq      L_MulDone_000117             ; 1/2:
+                     lsr       r20                          ;   1:
+                     brne      L_MulMult_000116             ; 1/2:
+L_MulDone_000117:    mov       r20, r0                      ;   1:
+                     push      r20                          ;   2:
+                     ldi       r20, 0x01                    ;   1: Immediate 1
+                     pop       r24                          ;   2:
+                     add       r20, r24                     ;   1: Add 8
+                     pop       r24                          ;   2:
+                     sub       r20, r24                     ;   1: Compare GT 8
+                     brlt      L_GtTrue_000118              ; 1/2:  signed
+                     clr       r20                          ;   1:
+                     rjmp      L_GtOut_000119               ;   2:
+L_GtTrue_000118:     clr       r20                          ;   1:
+                     inc       r20                          ;   1:
+L_GtOut_000119:                                             ;    :
+                     ;      Expr end ------------           
+                     ; ==== Expr Statement ================ ; 
+                     ldd       r20, Y+1                     ;   2: c
+                     push      r20                          ;   2:
+                     ldi       r20, 0x00                    ;   1: Immediate 0
+                     pop       r24                          ;   2:
+                     pop       r24                          ;   2: Mul 8
+                     clr       r0                           ;   1:
+L_MulMult_000120:    sbrc      r20, 0x00                    ; 1/3:
+                     add       r0, r24                      ;   1:
+                     lsl       r24                          ;   1:
+                     breq      L_MulDone_000121             ; 1/2:
+                     lsr       r20                          ;   1:
+                     brne      L_MulMult_000120             ; 1/2:
+L_MulDone_000121:    mov       r20, r0                      ;   1:
+                     push      r20                          ;   2:
+                     ldi       r20, 0x01                    ;   1: Immediate 1
+                     pop       r24                          ;   2:
+                     add       r20, r24                     ;   1: Add 8
+                     push      r20                          ;   2:
+                     ldd       r20, Y+1                     ;   2: c
+                     push      r20                          ;   2:
+                     ldi       r20, 0x00                    ;   1: Immediate 0
+                     pop       r24                          ;   2:
+                     pop       r24                          ;   2: Mul 8
+                     clr       r0                           ;   1:
+L_MulMult_000122:    sbrc      r20, 0x00                    ; 1/3:
+                     add       r0, r24                      ;   1:
+                     lsl       r24                          ;   1:
+                     breq      L_MulDone_000123             ; 1/2:
+                     lsr       r20                          ;   1:
+                     brne      L_MulMult_000122             ; 1/2:
+L_MulDone_000123:    mov       r20, r0                      ;   1:
+                     push      r20                          ;   2:
+                     ldi       r20, 0x01                    ;   1: Immediate 1
+                     mov       r24, r20                     ;   1:
+                     pop       r20                          ;   2:
+                     sub       r20, r24                     ;   1: Sub 8
+                     pop       r24                          ;   2:
+                     sub       r20, r24                     ;   1: Compare GT 8
+                     brlt      L_GtTrue_000124              ; 1/2:  signed
+                     clr       r20                          ;   1:
+                     rjmp      L_GtOut_000125               ;   2:
+L_GtTrue_000124:     clr       r20                          ;   1:
+                     inc       r20                          ;   1:
+L_GtOut_000125:                                             ;    :
+                     ;      Expr end ------------           
+                     ; ==== Expr Statement ================ ; 
+                     ldd       r20, Y+1                     ;   2: c
+                     push      r20                          ;   2:
+                     ldi       r20, 0x00                    ;   1: Immediate 0
+                     pop       r24                          ;   2:
+                     pop       r24                          ;   2: Mul 8
+                     clr       r0                           ;   1:
+L_MulMult_000126:    sbrc      r20, 0x00                    ; 1/3:
+                     add       r0, r24                      ;   1:
+                     lsl       r24                          ;   1:
+                     breq      L_MulDone_000127             ; 1/2:
+                     lsr       r20                          ;   1:
+                     brne      L_MulMult_000126             ; 1/2:
+L_MulDone_000127:    mov       r20, r0                      ;   1:
+                     push      r20                          ;   2:
+                     ldi       r20, 0x01                    ;   1: Immediate 1
+                     mov       r24, r20                     ;   1:
+                     pop       r20                          ;   2:
+                     sub       r20, r24                     ;   1: Sub 8
+                     push      r20                          ;   2:
+                     ldd       r20, Y+1                     ;   2: c
+                     push      r20                          ;   2:
+                     ldi       r20, 0x00                    ;   1: Immediate 0
+                     pop       r24                          ;   2:
+                     pop       r24                          ;   2: Mul 8
+                     clr       r0                           ;   1:
+L_MulMult_000128:    sbrc      r20, 0x00                    ; 1/3:
+                     add       r0, r24                      ;   1:
+                     lsl       r24                          ;   1:
+                     breq      L_MulDone_000129             ; 1/2:
+                     lsr       r20                          ;   1:
+                     brne      L_MulMult_000128             ; 1/2:
+L_MulDone_000129:    mov       r20, r0                      ;   1:
+                     push      r20                          ;   2:
+                     ldi       r20, 0x01                    ;   1: Immediate 1
+                     pop       r24                          ;   2:
+                     add       r20, r24                     ;   1: Add 8
+                     pop       r24                          ;   2:
+                     sub       r20, r24                     ;   1: Compare GT 8
+                     brlt      L_GtTrue_000130              ; 1/2:  signed
+                     clr       r20                          ;   1:
+                     rjmp      L_GtOut_000131               ;   2:
+L_GtTrue_000130:     clr       r20                          ;   1:
+                     inc       r20                          ;   1:
+L_GtOut_000131:                                             ;    :
+                     ;      Expr end ------------           
+                     ; ==== Expr Statement ================ ; 
+                     ldd       r20, Y+1                     ;   2: c
+                     push      r20                          ;   2:
+                     ldi       r20, 0x00                    ;   1: Immediate 0
+                     pop       r24                          ;   2:
+                     pop       r24                          ;   2: Mul 8
+                     clr       r0                           ;   1:
+L_MulMult_000132:    sbrc      r20, 0x00                    ; 1/3:
+                     add       r0, r24                      ;   1:
+                     lsl       r24                          ;   1:
+                     breq      L_MulDone_000133             ; 1/2:
+                     lsr       r20                          ;   1:
+                     brne      L_MulMult_000132             ; 1/2:
+L_MulDone_000133:    mov       r20, r0                      ;   1:
+                     push      r20                          ;   2:
+                     ldi       r20, 0x01                    ;   1: Immediate 1
+                     pop       r24                          ;   2:
+                     add       r20, r24                     ;   1: Add 8
+                     mov       r21, r20                     ;   1: Signed extend 8 to 16 bits
+                     lsl       r21                          ;   1:
+                     clr       r21                          ;   1: 
+                     sbc       r21, r21                     ;   1:
+                     push      r20                          ;   2:
+                     push      r21                          ;   2:
+                     ldd       r20, Y+1                     ;   2: c
+                     push      r20                          ;   2:
+                     ldi       r20, 0x00                    ;   1: Immediate 0
+                     pop       r24                          ;   2:
+                     pop       r24                          ;   2: Mul 8
+                     clr       r0                           ;   1:
+L_MulMult_000134:    sbrc      r20, 0x00                    ; 1/3:
+                     add       r0, r24                      ;   1:
+                     lsl       r24                          ;   1:
+                     breq      L_MulDone_000135             ; 1/2:
+                     lsr       r20                          ;   1:
+                     brne      L_MulMult_000134             ; 1/2:
+L_MulDone_000135:    mov       r20, r0                      ;   1:
+                     push      r20                          ;   2:
+                     ldi       r20, 0x01                    ;   1: Immediate 1
+                     mov       r24, r20                     ;   1:
+                     pop       r20                          ;   2:
+                     sub       r20, r24                     ;   1: Sub 8
+                     mov       r21, r20                     ;   1: Signed extend 8 to 16 bits
+                     lsl       r21                          ;   1:
+                     clr       r21                          ;   1: 
+                     sbc       r21, r21                     ;   1:
+                     pop       r25                          ;   2:
+                     pop       r24                          ;   2:
+                     sub       r20, r24                     ;   1: Compare GT 16
+                     sbc       r21, r25                     ;   1:
+                     brlo      L_GtTrue_000136              ; 1/2:  unsigned
+                     clr       r20                          ;   1:
+                     rjmp      L_GtOut_000137               ;   2:
+L_GtTrue_000136:     clr       r20                          ;   1:
+                     inc       r20                          ;   1:
+L_GtOut_000137:                                             ;    :
+                     ;      Expr end ------------           
+                     ; ==== Expr Statement ================ ; 
+                     ldi       r20, 0x01                    ;   1: Immediate 1
+                     ldi       r21, 0x00                    ;   1:
+                     push      r20                          ;   2:
+                     push      r21                          ;   2:
+                     ldi       r20, 0x01                    ;   1: Immediate 1
+                     ldi       r21, 0x00                    ;   1:
+                     pop       r25                          ;   2:
+                     pop       r24                          ;   2:
+                     sub       r20, r24                     ;   1: Compare LE 16
+                     sbc       r21, r25                     ;   1:
+                     brge      L_LeTrue_000138              ; 1/2:  signed
+                     clr       r20                          ;   1:
+                     rjmp      L_LeOut_000139               ;   2:
+L_LeTrue_000138:     clr       r20                          ;   1:
+                     inc       r20                          ;   1:
+L_LeOut_000139:                                             ;    :
+                     ;      Expr end ------------           
+                     ; ==== Expr Statement ================ ; 
+                     ldi       r20, 0x01                    ;   1: Immediate 1
+                     push      r20                          ;   2:
+                     ldi       r20, 0xff                    ;   1: Immediate 255
+                     pop       r24                          ;   2:
+                     sub       r20, r24                     ;   1: Compare LE 8
+                     brge      L_LeTrue_000140              ; 1/2:  signed
+                     clr       r20                          ;   1:
+                     rjmp      L_LeOut_000141               ;   2:
+L_LeTrue_000140:     clr       r20                          ;   1:
+                     inc       r20                          ;   1:
+L_LeOut_000141:                                             ;    :
+                     ;      Expr end ------------           
+                     ; ==== Expr Statement ================ ; 
+                     ldi       r20, 0xff                    ;   1: Immediate 255
+                     push      r20                          ;   2:
+                     ldi       r20, 0x01                    ;   1: Immediate 1
+                     pop       r24                          ;   2:
+                     sub       r20, r24                     ;   1: Compare LE 8
+                     brge      L_LeTrue_000142              ; 1/2:  signed
+                     clr       r20                          ;   1:
+                     rjmp      L_LeOut_000143               ;   2:
+L_LeTrue_000142:     clr       r20                          ;   1:
+                     inc       r20                          ;   1:
+L_LeOut_000143:                                             ;    :
+                     ;      Expr end ------------           
+                     ; ==== Expr Statement ================ ; 
+                     ldd       r20, Y+1                     ;   2: c
+                     push      r20                          ;   2:
+                     ldi       r20, 0x00                    ;   1: Immediate 0
+                     pop       r24                          ;   2:
+                     pop       r24                          ;   2: Mul 8
+                     clr       r0                           ;   1:
+L_MulMult_000144:    sbrc      r20, 0x00                    ; 1/3:
+                     add       r0, r24                      ;   1:
+                     lsl       r24                          ;   1:
+                     breq      L_MulDone_000145             ; 1/2:
+                     lsr       r20                          ;   1:
+                     brne      L_MulMult_000144             ; 1/2:
+L_MulDone_000145:    mov       r20, r0                      ;   1:
+                     push      r20                          ;   2:
+                     ldi       r20, 0x01                    ;   1: Immediate 1
+                     pop       r24                          ;   2:
+                     add       r20, r24                     ;   1: Add 8
+                     push      r20                          ;   2:
+                     ldd       r20, Y+1                     ;   2: c
+                     push      r20                          ;   2:
+                     ldi       r20, 0x00                    ;   1: Immediate 0
+                     pop       r24                          ;   2:
+                     pop       r24                          ;   2: Mul 8
+                     clr       r0                           ;   1:
+L_MulMult_000146:    sbrc      r20, 0x00                    ; 1/3:
+                     add       r0, r24                      ;   1:
+                     lsl       r24                          ;   1:
+                     breq      L_MulDone_000147             ; 1/2:
+                     lsr       r20                          ;   1:
+                     brne      L_MulMult_000146             ; 1/2:
+L_MulDone_000147:    mov       r20, r0                      ;   1:
+                     push      r20                          ;   2:
+                     ldi       r20, 0x01                    ;   1: Immediate 1
+                     pop       r24                          ;   2:
+                     add       r20, r24                     ;   1: Add 8
+                     pop       r24                          ;   2:
+                     sub       r20, r24                     ;   1: Compare LE 8
+                     brge      L_LeTrue_000148              ; 1/2:  signed
+                     clr       r20                          ;   1:
+                     rjmp      L_LeOut_000149               ;   2:
+L_LeTrue_000148:     clr       r20                          ;   1:
+                     inc       r20                          ;   1:
+L_LeOut_000149:                                             ;    :
+                     ;      Expr end ------------           
+                     ; ==== Expr Statement ================ ; 
+                     ldd       r20, Y+1                     ;   2: c
+                     push      r20                          ;   2:
+                     ldi       r20, 0x00                    ;   1: Immediate 0
+                     pop       r24                          ;   2:
+                     pop       r24                          ;   2: Mul 8
+                     clr       r0                           ;   1:
+L_MulMult_000150:    sbrc      r20, 0x00                    ; 1/3:
+                     add       r0, r24                      ;   1:
+                     lsl       r24                          ;   1:
+                     breq      L_MulDone_000151             ; 1/2:
+                     lsr       r20                          ;   1:
+                     brne      L_MulMult_000150             ; 1/2:
+L_MulDone_000151:    mov       r20, r0                      ;   1:
+                     push      r20                          ;   2:
+                     ldi       r20, 0x01                    ;   1: Immediate 1
+                     pop       r24                          ;   2:
+                     add       r20, r24                     ;   1: Add 8
+                     push      r20                          ;   2:
+                     ldd       r20, Y+1                     ;   2: c
+                     push      r20                          ;   2:
+                     ldi       r20, 0x00                    ;   1: Immediate 0
+                     pop       r24                          ;   2:
+                     pop       r24                          ;   2: Mul 8
+                     clr       r0                           ;   1:
+L_MulMult_000152:    sbrc      r20, 0x00                    ; 1/3:
+                     add       r0, r24                      ;   1:
+                     lsl       r24                          ;   1:
+                     breq      L_MulDone_000153             ; 1/2:
+                     lsr       r20                          ;   1:
+                     brne      L_MulMult_000152             ; 1/2:
+L_MulDone_000153:    mov       r20, r0                      ;   1:
+                     push      r20                          ;   2:
+                     ldi       r20, 0x01                    ;   1: Immediate 1
+                     mov       r24, r20                     ;   1:
+                     pop       r20                          ;   2:
+                     sub       r20, r24                     ;   1: Sub 8
+                     pop       r24                          ;   2:
+                     sub       r20, r24                     ;   1: Compare LE 8
+                     brge      L_LeTrue_000154              ; 1/2:  signed
+                     clr       r20                          ;   1:
+                     rjmp      L_LeOut_000155               ;   2:
+L_LeTrue_000154:     clr       r20                          ;   1:
+                     inc       r20                          ;   1:
+L_LeOut_000155:                                             ;    :
+                     ;      Expr end ------------           
+                     ; ==== Expr Statement ================ ; 
+                     ldd       r20, Y+1                     ;   2: c
+                     push      r20                          ;   2:
+                     ldi       r20, 0x00                    ;   1: Immediate 0
+                     pop       r24                          ;   2:
+                     pop       r24                          ;   2: Mul 8
+                     clr       r0                           ;   1:
+L_MulMult_000156:    sbrc      r20, 0x00                    ; 1/3:
+                     add       r0, r24                      ;   1:
+                     lsl       r24                          ;   1:
+                     breq      L_MulDone_000157             ; 1/2:
+                     lsr       r20                          ;   1:
+                     brne      L_MulMult_000156             ; 1/2:
+L_MulDone_000157:    mov       r20, r0                      ;   1:
+                     push      r20                          ;   2:
+                     ldi       r20, 0x01                    ;   1: Immediate 1
+                     mov       r24, r20                     ;   1:
+                     pop       r20                          ;   2:
+                     sub       r20, r24                     ;   1: Sub 8
+                     push      r20                          ;   2:
+                     ldd       r20, Y+1                     ;   2: c
+                     push      r20                          ;   2:
+                     ldi       r20, 0x00                    ;   1: Immediate 0
+                     pop       r24                          ;   2:
+                     pop       r24                          ;   2: Mul 8
+                     clr       r0                           ;   1:
+L_MulMult_000158:    sbrc      r20, 0x00                    ; 1/3:
+                     add       r0, r24                      ;   1:
+                     lsl       r24                          ;   1:
+                     breq      L_MulDone_000159             ; 1/2:
+                     lsr       r20                          ;   1:
+                     brne      L_MulMult_000158             ; 1/2:
+L_MulDone_000159:    mov       r20, r0                      ;   1:
+                     push      r20                          ;   2:
+                     ldi       r20, 0x01                    ;   1: Immediate 1
+                     pop       r24                          ;   2:
+                     add       r20, r24                     ;   1: Add 8
+                     pop       r24                          ;   2:
+                     sub       r20, r24                     ;   1: Compare LE 8
+                     brge      L_LeTrue_000160              ; 1/2:  signed
+                     clr       r20                          ;   1:
+                     rjmp      L_LeOut_000161               ;   2:
+L_LeTrue_000160:     clr       r20                          ;   1:
+                     inc       r20                          ;   1:
+L_LeOut_000161:                                             ;    :
+                     ;      Expr end ------------           
+                     ; ==== Expr Statement ================ ; 
+                     ldd       r20, Y+1                     ;   2: c
+                     push      r20                          ;   2:
+                     ldi       r20, 0x00                    ;   1: Immediate 0
+                     pop       r24                          ;   2:
+                     pop       r24                          ;   2: Mul 8
+                     clr       r0                           ;   1:
+L_MulMult_000162:    sbrc      r20, 0x00                    ; 1/3:
+                     add       r0, r24                      ;   1:
+                     lsl       r24                          ;   1:
+                     breq      L_MulDone_000163             ; 1/2:
+                     lsr       r20                          ;   1:
+                     brne      L_MulMult_000162             ; 1/2:
+L_MulDone_000163:    mov       r20, r0                      ;   1:
+                     push      r20                          ;   2:
+                     ldi       r20, 0x01                    ;   1: Immediate 1
+                     pop       r24                          ;   2:
+                     add       r20, r24                     ;   1: Add 8
+                     mov       r21, r20                     ;   1: Signed extend 8 to 16 bits
+                     lsl       r21                          ;   1:
+                     clr       r21                          ;   1: 
+                     sbc       r21, r21                     ;   1:
+                     push      r20                          ;   2:
+                     push      r21                          ;   2:
+                     ldd       r20, Y+1                     ;   2: c
+                     push      r20                          ;   2:
+                     ldi       r20, 0x00                    ;   1: Immediate 0
+                     pop       r24                          ;   2:
+                     pop       r24                          ;   2: Mul 8
+                     clr       r0                           ;   1:
+L_MulMult_000164:    sbrc      r20, 0x00                    ; 1/3:
+                     add       r0, r24                      ;   1:
+                     lsl       r24                          ;   1:
+                     breq      L_MulDone_000165             ; 1/2:
+                     lsr       r20                          ;   1:
+                     brne      L_MulMult_000164             ; 1/2:
+L_MulDone_000165:    mov       r20, r0                      ;   1:
+                     push      r20                          ;   2:
+                     ldi       r20, 0x01                    ;   1: Immediate 1
+                     mov       r24, r20                     ;   1:
+                     pop       r20                          ;   2:
+                     sub       r20, r24                     ;   1: Sub 8
+                     mov       r21, r20                     ;   1: Signed extend 8 to 16 bits
+                     lsl       r21                          ;   1:
+                     clr       r21                          ;   1: 
+                     sbc       r21, r21                     ;   1:
+                     pop       r25                          ;   2:
+                     pop       r24                          ;   2:
+                     sub       r20, r24                     ;   1: Compare LE 16
+                     sbc       r21, r25                     ;   1:
+                     brsh      L_LeTrue_000166              ; 1/2:  unsigned
+                     clr       r20                          ;   1:
+                     rjmp      L_LeOut_000167               ;   2:
+L_LeTrue_000166:     clr       r20                          ;   1:
+                     inc       r20                          ;   1:
+L_LeOut_000167:                                             ;    :
+                     ;      Expr end ------------           
+                     ; ==== Expr Statement ================ ; 
+                     ldd       r20, Y+1                     ;   2: c
+                     ;      Expr end ------------           
+                     ;      Compound End --------           ; L_compound_Id_000001
+                     ; #### exit ################           ; 
+L_Exit_000000:       adiw      r28, 1                       ;   2: Y += sizeof(locals)
+                     out       _IO_SPH, r29                 ;   1: SP <- Y
+                     out       _IO_SPL, r28                 ;   1:
+                     pop       r28                          ;   2: FP <- preserved Frame
+                     pop       r29                          ;   2: 
+                     ret                                    ;   4: 
+                     
+         
+                            
+                     ;.endseg                               ; === End of TEXT segment ===
+
+
+
+                     .end                                   ; End of generated code.
+
+; eof

@@ -1,0 +1,7 @@
+﻿  Main.c
+  ToDo:  Don't declare Auto genarated strings if they were used in an initializer
+  ToDo:  Do declare Auto genarated strings if they are used for their address
+  ToDo:  Generated code to go into a file
+  ToDo:  Error reporting use colours and printf like structure
+  CC_Avr.vcxproj -> D:\DL\sean\RoyalHolloway\2019\CC_Avr\Debug\CC_Avr.exe
+  CC_Avr.vcxproj -> D:\DL\sean\RoyalHolloway\2019\CC_Avr\Debug\CC_Avr.pdb (Full PDB)

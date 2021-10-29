@@ -1,0 +1,26 @@
+// # ---------------------------------------------------------------------------------------------
+// #  $URL$
+// # ---------------------------------------------------------------------------------------------
+// #  File:                  $Id$
+// #  Last committed:  $Revision$
+// # ---------------------------------------------------------------------------------------------
+
+// Title: VersionInfo.h
+// 
+//  Implementation details.
+//
+//
+
+#ifndef __VERSIONINFO_H__
+#define __VERSIONINFO_H__
+
+#ifdef DEBUG_INCLUDE_FILES 
+#pragma message("     including " __FILE__)
+#endif // DEBUG_INCLUDE_FILES
+
+
+void  VersionProcessInfo(pgs8 argv0);
+
+#endif // __VERSIONINFO_H__
+
+// eof  $Workfile: VersionInfo.h $

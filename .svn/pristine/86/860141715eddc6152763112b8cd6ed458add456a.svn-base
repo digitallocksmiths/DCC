@@ -1,0 +1,14 @@
+
+typedef unsigned char  u8;
+typedef unsigned short u16;
+
+extern _noreturn   void  LongJmpTestReturn(void);
+
+u8 baA[20];
+
+void foo(void) {
+    
+    if (baA[1]++ == ((1)?baA[2]++:baA[3]++)) {
+        baA[4]++;
+    }
+}

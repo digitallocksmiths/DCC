@@ -1,0 +1,18 @@
+
+typedef unsigned char  u8;
+typedef unsigned short u16;
+
+u16      aInvokeCounts[16];     
+u16 *    pA;
+
+
+void    foo(void) {
+    
+//    aInvokeCounts[3]++;
+//    ++aInvokeCounts[4];
+//    (*(pA+2))++;
+//    *pA++;
+    *pA++;
+//    pA++--;
+    
+}

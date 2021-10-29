@@ -1,0 +1,62 @@
+﻿  YACC
+  D:\DL\sean\RoyalHolloway\2019\CC_Avr\\tool\yacc.exe: 1 shift/reduce conflict.
+  Console.c
+  TypeCtrl.c
+  Statements.c
+  Main.c
+  Todo: Declaration function names to start with Decl?
+  Todo: Local and parameters:  read and write need immeadiate or direct indication (ld r0,a or ld r0,#a.
+  Todo: Local and parameters:  read before set warnings.
+  Todo: No concept of alignmnent. All vars occupy their own size and no packing is generated.
+  Todo: void Foo(void). Parameters display incorrectly.
+  Todo: Subtraction of arrays looks odd. Debug and comment the code.
+  ToDo: C-parsing expression optimisation could be skipped and left for the optimizer?
+  ToDo: Array, arrow and dot could be translated to arithmetic?
+  Lex.c
+  Initializers.c
+  warn XS here
+  warn XS here
+  GenStatements.c
+  GenStatementPrettyPrint: ExprOptimize commented out
+      GenFunction: iLocalsSize<? use dummy pushes to make local's space
+  GenExpression.c
+   Logical operations generate values. Change this to branch targets.
+      GenAdd: right var = const is a common special case.
+      GenSub: right var = const is a common special case.
+      GenMul: right var = const is a common special case.
+      GenDiv: right var = const is a common special case.
+      GenMod: right var = const is a common special case.
+      GenAnd: right var = const is a common special case.
+      GenXor: right var = const is a common special case.
+      GenOr: right var = const is a common special case.
+      GenShiftR: right var = const is a common special case.
+      GenShiftL: right var = const is a common special case.
+  ** BUG *** UnaryPtrPostInc if the target is a pointer the increment size changes!!!!!
+  ** BUG *** UnaryPtrPostDec if the target is a pointer the increment size changes!!!!!
+  ** BUG *** UnaryPtrPreInc if the target is a pointer the increment size changes!!!!!
+  ** BUG *** UnaryPtrPreDec if the target is a pointer the increment size changes!!!!!
+  ** BUG *** UnaryPostInc if the target is a pointer the increment size changes!!!!!
+  ** BUG *** UnaryPreInc if the target is a pointer the increment size changes!!!!!
+  ** BUG *** UnaryPostDec if the target is a pointer the increment size changes!!!!!
+  ** BUG *** UnaryPreDec if the target is a pointer the increment size changes!!!!!
+      GenExprAssign: var = const is a common special case.
+  GenData.c
+      **** GenDataObjectEnum(): improvement. Comment could be the enum symbol name?
+  Gen.c
+  ExprOptimize.c
+      OptimizeTernary(): Needs to be optimized.
+      OptimizeDotExpr(): Needs to be optimized.
+      OptimizeArrowExpr(): Needs to be optimized.
+      OptimizeArrayExpr(): Needs to be optimized.
+      OptimizeAssign(): Needs to be optimized.
+      **** ExprOptimize(): Could do better!
+  Expr.c
+      ExprMakeConstS: Should flag the contents as constant.
+  Optimize And
+  Optimize Or
+  Optimize Xor
+      **** should we change the node's type here?
+  C_Yacced.tab.c
+  Generating Code...
+  CC_Avr.vcxproj -> D:\DL\sean\RoyalHolloway\2019\CC_Avr\Debug\CC_Avr.exe
+  CC_Avr.vcxproj -> D:\DL\sean\RoyalHolloway\2019\CC_Avr\Debug\CC_Avr.pdb (Full PDB)

@@ -1,0 +1,536 @@
+
+#define _CRT_SECURE_NO_WARNINGS
+
+//#include <conio.h>
+#include <stdio.h>
+//#include <ctype.h>
+//#include <signal.h>
+//#include <setjmp.h>
+//#include <stdlib.h>
+//#include <memory.h>
+//#include <string.h>
+#include <assert.h>
+#include <Windows.h>
+
+//#include "C_Yacced.tab.h"
+#include "lex.h"
+#include "typectrl.h"
+#include "expr.h"
+#include "Gen.h"
+#include "main.h"
+
+
+#define GEN_PREFIX "L"
+static WORD GenCount = 0;
+
+LPSTR GenLabel(LPSTR PreFix) {
+	LPSTR Label = New(strlen(GEN_PREFIX)+strlen(PreFix)+6+1);
+	sprintf(Label, GEN_PREFIX "%s%06ld", PreFix, GenCount++);
+	return Label;
+ }
+
+
+static void Pad(int n) {
+    while (n>0) {
+        printf(" ");
+        n--;
+    }
+}
+
+#define LABEL_WIDTH   20
+#define OPCODE_WIDTH  10
+#define OPERAND_WIDTH 15
+#define ASSEMBLER_WIDTH (OPCODE_WIDTH+OPERAND_WIDTH)
+
+
+static void GenAsmOut(LPSTR pszLabel, LPSTR pszOpcode, LPSTR pszOperand, LPSTR pszComment, BOOL fNL) {
+    int n;
+    if ((pszLabel != NULL) && (*pszLabel != '\0')) { n = printf("%s:", pszLabel); }
+    else { n = 0; }
+    Pad(LABEL_WIDTH - n);
+
+    if ((pszOpcode != NULL) && (*pszOpcode != '\0')) { n = printf("%s", pszOpcode); }
+    else { n = 0; }
+    Pad(OPCODE_WIDTH - n);
+
+    if ((pszOperand != NULL) && (*pszOperand != '\0')) { n = printf("%s", pszOperand); }
+    else { n = 0; }
+    Pad(OPERAND_WIDTH - n);
+
+    if (pszComment != NULL) {
+        n = printf("; %s", pszComment);
+        if (fNL) {
+            printf("\n");
+        }
+    }
+    else {
+        printf("\n");
+    }
+
+}
+
+static LPSTR sign_unsign(WORD T) {
+    if ((T & TypeUNSIGNED) == TypeUNSIGNED) return "unsigned ";
+    if ((T & TypeSIGNED) == TypeSIGNED)   return "signed ";
+    return "";
+}
+
+BOOL GenIsData(WORD nUse) {
+    switch (nUse) {
+    case DecSpec:
+    case DecPtr:
+    case DecArray:  return TRUE;
+    case DecId:
+    case DecFunc:   return FALSE;
+    default:
+        assert(FALSE);
+    }
+    return FALSE;
+}
+
+#define TT(D,T) (((D) & (T)) == (T))
+
+
+static void GenObjectComment(TPDeclSpec pDecl) {
+    while (pDecl) {
+        switch (pDecl->Usage) {
+        case    DecId:          // Id
+        case    DecFunc:        // Function 
+            printf("GenBssObjectComment():  Unexpected Useage '%d'\n", pDecl->Usage);
+            return;
+
+        case    DecArray:
+            printf("Array[%ld] of ", pDecl->Use.DecArray.Size);
+            pDecl = pDecl->Use.DecArray.pTarget;
+            break;
+
+        case    DecPtr:
+            switch (pDecl->Use.DecPtr.Qual) {
+            case QualCONST:    printf("pointer to constant\n");  break;
+            case QualVOLATILE: printf("pointer to volatile\n");  break;
+            case QualNEAR:     printf("pointer to near\n");      break;
+            case QualFAR:      printf("pointer to far\n");       break;
+            default:           printf("pointer (generic)\n");   break;
+            }
+            return;
+
+        case    DecSpec:
+            if ((pDecl->Use.DecSpec.Type) & TypeSTRUCT) {
+                LpStructSet p = pDecl->Use.DecSpec.pPtr;
+                if (p->fUnion) printf("union '%s'\n", p->szSetName);
+                else           printf("structure '%s'\n", p->szSetName);
+                return;
+            }
+            else if ((pDecl->Use.DecSpec.Type) & TypeENUM) {
+                TPEnumSet e = pDecl->Use.DecSpec.pPtr;
+                printf("enum '%s'\n", e->pszSetName);
+                return;
+            }
+            else if ((pDecl->Use.DecSpec.Type) & TypeTYPEDEF) {
+                printf("typedef not yet supported\n");
+                //ParseDeclSpec(pDecl->Use.DecSpec.Ptr, fDoBrothers); 
+                return;
+            }
+            else {
+                if   TT(pDecl->Use.DecSpec.Type, (TypeLONG | TypeDOUBLE))printf("long double");
+                else if TT(pDecl->Use.DecSpec.Type, TypeDOUBLE)          printf("double");
+                else if TT(pDecl->Use.DecSpec.Type, TypeFLOAT)           printf("float");
+                else if TT(pDecl->Use.DecSpec.Type, TypeLONG)            printf("%slong", sign_unsign(pDecl->Use.DecSpec.Type));
+                else if TT(pDecl->Use.DecSpec.Type, TypeSHORT)           printf("%sshort ", sign_unsign(pDecl->Use.DecSpec.Type));
+                else if TT(pDecl->Use.DecSpec.Type, TypeINT)             printf("%sint", sign_unsign(pDecl->Use.DecSpec.Type));
+                else if TT(pDecl->Use.DecSpec.Type, TypeCHAR)            printf("%schar", sign_unsign(pDecl->Use.DecSpec.Type));
+                else if TT(pDecl->Use.DecSpec.Type, TypeSIGNED)          printf("signed");
+                else if TT(pDecl->Use.DecSpec.Type, TypeUNSIGNED)        printf("unsigned");
+                else if TT(pDecl->Use.DecSpec.Type, TypeVOID)            printf("void");
+                else                                                     printf("unknown type 0x%04x", pDecl->Use.DecSpec.Type);
+
+                //              DescClass(pDecl->Use.DecSpec.Class); 
+                //              DescQual(pDecl->Use.DecSpec.Qual); 
+                printf("\n");
+            }
+            return;
+
+        default:
+            printf("GenBssObjectComment(): Unknown Useage '%d'\n", pDecl->Usage);
+            return;
+        }
+    }
+}
+
+// ##########################################################################################
+// Data segment generator
+
+static BOOL SetupConstInitializer(TPDeclSpec T, LPSTR pszOpcode, LPSTR pszOperand, LPSTR pszComment, __int64 nVal, LPSTR pszName) {
+
+    switch (CalcSizeOf(T)) {
+    case 1: sprintf(pszOpcode, ".byte");
+        if ((T->Use.DecSpec.Type & TypeUNSIGNED) == TypeUNSIGNED) sprintf(pszOperand, "%hhu", (unsigned char)(nVal & 0xFF));
+        else                                                      sprintf(pszOperand, "%hhd", (signed char)(nVal & 0xFF));
+        sprintf(pszComment, "          0x%02x -> %s", (unsigned char)(nVal & 0xFF), pszName);
+        return TRUE;
+    case 2: sprintf(pszOpcode, ".word"); ;
+        if ((T->Use.DecSpec.Type & TypeUNSIGNED) == TypeUNSIGNED)  sprintf(pszOperand, "%hu", (unsigned short)(nVal & 0xFFFF));
+        else                                                       sprintf(pszOperand, "%hd", (signed short)(nVal & 0xFFFF));
+        sprintf(pszComment, "        0x%04x -> %s", (unsigned char)(nVal & 0xFFFF), pszName);
+        return TRUE;
+    case 4: sprintf(pszOpcode, ".dword"); ;
+        if ((T->Use.DecSpec.Type & TypeUNSIGNED) == TypeUNSIGNED)  sprintf(pszOperand, "%I32u", (unsigned int)(nVal & 0xFFFFFFFFL));
+        else                                                       sprintf(pszOperand, "%I32d", (signed int)(nVal & 0xFFFFFFFFL));
+        sprintf(pszComment, "    0x%08x -> %s", (unsigned char)(nVal & 0xFFFFFFFFL), pszName);
+        return TRUE;
+    default: sprintf(pszOpcode, "; unknown size");
+        sprintf(pszOperand, "%I64u", nVal);
+        sprintf(pszComment, "    0x%016I64x -> %s", nVal, pszName);
+        return FALSE;
+    }
+}
+
+static BOOL SetupVarInitializer(TPDeclSpec T, LPSTR pszOpcode, LPSTR pszOperand, LPSTR pszVar) {
+
+    sprintf(pszOperand, "%s", pszVar);
+
+    switch (CalcSizeOf(T)) {
+    case 1: sprintf(pszOpcode, ".byte");
+        break;
+    case 2: sprintf(pszOpcode, ".word"); ;
+        break;
+    case 4: sprintf(pszOpcode, ".dword"); ;
+        break;
+    default: sprintf(pszOpcode, "; unknown size");
+        return FALSE;
+    }
+    return TRUE;
+
+}
+
+DWORD InitializerCount(TPExprNode pInit) {
+    DWORD n = 0;
+    while (pInit != 0) {
+        n++;
+        pInit = pInit->Use.Init.pSibling;
+    }
+    return n;
+}
+
+// ######################################################################################################################
+static void GenDataObject(LPSTR pszName, TPDeclSpec pTarget, TPExprNode pInit); // forward declaration for recursion in struct definitions.
+
+void GenDataObjectString(TPDeclSpec pTarget, LPSTR pszInit) {                                                            // Initialized Strings
+    char szOperand[32];
+    char szComment[32];
+
+    int nLen = strlen(pszInit)+1;
+    
+    while (nLen--) {
+        sprintf(szOperand, "%hhu", *pszInit);
+        if (isprint(*pszInit)) {
+            sprintf(szComment, "    %02x, \'%c\'    ", *pszInit, *pszInit);
+        }
+        else {
+            sprintf(szComment, "    %02x,        ", *pszInit);
+        }
+        GenAsmOut(NULL, ".byte", szOperand, szComment, TRUE);
+        pszInit++;
+    }
+}
+
+
+void GenDataObjectPointer(LPSTR pszName, TPDeclSpec pTarget, TPExprNode pInit) {                                                           // Initialized pointers
+
+    char szOpcode[32];
+    char szOperand[32];
+    char szComment[64];
+
+    szOpcode[0] = 0;
+    szOperand[0] = 0;
+    szComment[0] = 0;
+
+    if (pInit != NULL) {
+        assert(pInit->Usage == uInit);
+        TPExprNode Val = pInit->Use.Init.pAssignment;
+
+        if (pInit->Use.Init.pChildren != NULL) {                            // start of bracketed set when singleton is expected
+            WarningGen("Unexpected structure in initializer data for variable/field ", pszName);
+            if (!SetupConstInitializer(pTarget, szOpcode, szOperand, szComment, 0, pszName)) {
+                ErrorGen("GenDataObjectPointer(): Unrecognized size of variable ", NULL);
+            }
+        }
+        else if (Val->Usage == uConst) {
+            unsigned __int64    nVal;
+            nVal = Val->Use.Const.lInteger;
+            if (!SetupConstInitializer(pTarget, szOpcode, szOperand, szComment, nVal, pszName)) {
+                ErrorGen("GenDataObjectPointer(): Unrecognized size of variable ", NULL);
+            }
+        }
+        else if (Val->Usage == uVar) {
+            if (!SetupVarInitializer(pTarget, szOpcode, szOperand, Val->Use.Var.pszIdentifier)) {
+                ErrorGen("GenDataObjectPointer(): Unrecognized size of variable ", NULL);
+            }
+        }
+        else {
+            WarningGen("GenDataObjectPointer(): Non constant pointer value in initialization of ", NULL);
+        }
+    }
+    else {
+        if (!SetupConstInitializer(pTarget, szOpcode, szOperand, szComment, 0, pszName)) {
+            ErrorGen("GenDataObjectPointer(): Unrecognized size of variable ", pszName);
+        }
+
+    }
+
+    GenAsmOut(NULL, szOpcode, szOperand, szComment, TRUE);
+
+}
+
+void GenDataObjectArray(LPSTR pszName, TPDeclSpec pTarget, TPExprNode pInit) {                                                             // Initialized Arrays
+    char szName[256];
+
+    assert(pInit == NULL || pInit->Usage == uInit);
+    assert(pTarget->Usage == DecArray);
+
+    DWORD      dwSize = pTarget->Use.DecArray.Size;
+    DWORD      dwInit;
+    TPDeclSpec pElement = pTarget->Use.DecArray.pTarget;
+
+    if (pInit != NULL && pInit->Use.Init.pChildren) {
+        pInit = pInit->Use.Init.pChildren;
+    }
+    dwInit = InitializerCount(pInit);
+    if (dwSize == 0) {
+        dwSize = dwInit;
+        pTarget->Use.DecArray.Size = dwSize;
+    }
+    else if (dwSize < dwInit) {
+        WarningGen("GenDataObjectArray() Too many initializors for ", pszName);
+    }
+
+    for (DWORD dwIndex = 0; dwIndex < dwSize; dwIndex++) {
+        sprintf_s(szName, sizeof(szName), "%s[%ld]", pszName, dwIndex);
+
+        GenDataObject(szName, pElement, pInit);
+        //pElement = pElement->Use.DecId.pBrother;
+        if (pInit != NULL) {
+            pInit = pInit->Use.Init.pSibling;
+        }
+    }
+}
+
+
+void    GenDataObjectUnion(LPSTR pszName, TPDeclSpec pTarget, TPExprNode pInit) {
+    char szName[256];
+
+    assert(pInit == NULL || pInit->Usage == uInit);
+    assert(pTarget->Usage == DecSpec);
+
+    LpStructSet S = pTarget->Use.DecSpec.pPtr;
+    TPDeclSpec pElement = S->pElements;
+
+    if (pInit != NULL && pInit->Use.Init.pChildren) {
+        pInit = pInit->Use.Init.pChildren;
+    }
+
+    DWORD dwUnionSize = CalcSizeOf(pTarget);
+    DWORD dwFirstFieldSize = 0L;
+
+    if (pElement != NULL) {
+        assert(pElement->Usage == DecId);
+        dwFirstFieldSize = CalcSizeOf(pElement->Use.DecId.pTarget);
+        sprintf_s(szName, sizeof(szName), "%s.%s", pszName, pElement->Use.DecId.pszName);
+        GenDataObject(szName, pElement->Use.DecId.pTarget, pInit);
+    }
+    
+    if (dwUnionSize > dwFirstFieldSize) {                                                       // if the field we generated is smaller than the union
+        char szOperand[32];
+        char szComment[256];
+        sprintf(szOperand, "%lu", dwUnionSize-dwFirstFieldSize);
+        sprintf_s(szComment, sizeof(szComment), "               -> %s packed to size %lu", pszName, dwUnionSize);
+        GenAsmOut(NULL, ".space", szOperand, szComment, TRUE);
+    }
+
+}
+
+void    GenDataObjectStructure(LPSTR pszName, TPDeclSpec pTarget, TPExprNode pInit) {                   // Structure generation.
+    char szName[256];
+    
+    assert(pInit == NULL || pInit->Usage == uInit);
+    assert(pTarget->Usage == DecSpec);
+
+    LpStructSet S = pTarget->Use.DecSpec.pPtr;
+    TPDeclSpec pElement = S->pElements;
+    
+    if (pInit != NULL && pInit->Use.Init.pChildren) {
+        pInit = pInit->Use.Init.pChildren;
+    }
+
+    while (pElement != NULL) {
+        assert(pElement->Usage == DecId);
+        sprintf_s(szName, sizeof(szName), "%s.%s", pszName, pElement->Use.DecId.pszName);
+        GenDataObject(szName, pElement->Use.DecId.pTarget, pInit);
+        pElement = pElement->Use.DecId.pBrother;
+        if (pInit != NULL) {
+            pInit = pInit->Use.Init.pSibling;
+        }
+    }
+
+}
+
+void    GenDataObjectEnum(LPSTR pszName, TPDeclSpec pTarget, TPExprNode pInit) {                        // Enum value
+    char szOperand[32];
+    char szComment[32];
+
+#pragma message("    **** GenDataObjectEnum(): improvement. Comment could be the enum symbol name?")
+    assert(pInit->Usage == uInit);
+    TPExprNode Val = pInit->Use.Init.pAssignment;
+
+    int        nVal;
+    if (Val->Usage != uConst) {
+        WarningGen("Non constant interger in Enum initialization of ", NULL);
+        nVal = 0;
+    }
+    else {
+        nVal = Val->Use.Const.lInteger;
+    }
+
+    sprintf(szOperand, "%hd", (int)(nVal & 0xFFFF));
+    sprintf(szComment, "    0x%04x", (int)(nVal&0xFFFF));
+    GenAsmOut(NULL, ".word", szOperand, szComment, TRUE);
+}
+
+void    GenDataObjectTypedef(LPSTR pszName, TPDeclSpec pTarget, TPExprNode pInit) {
+    ErrorGen("GenDataObjectTypedef() Unimplemented", NULL);
+    printf("Typedef\n");
+}
+
+void    GenDataObjectBasetype(LPSTR pszName, TPDeclSpec pTarget, TPExprNode pInit) {
+    
+    char szOpcode[32];
+    char szOperand[32];
+    char szComment[256];
+    unsigned __int64   nVal = 0L;
+
+    if (pInit != NULL) {
+        assert(pInit->Usage == uInit);
+        TPExprNode Val = pInit->Use.Init.pAssignment;
+        
+        if (pInit->Use.Init.pChildren != NULL) {                            // start of braketed set whne singleton is expected
+            WarningGen("Unexpected structure in initializer data for variable/field ", pszName);
+            nVal = 0;
+        }
+        else if (Val->Usage != uConst) {
+            WarningGen("Non constant interger in initialization.", NULL);
+            nVal = 0;
+        }
+        else {
+            nVal = Val->Use.Const.lInteger;
+        }
+    }
+    if (!SetupConstInitializer(pTarget, szOpcode, szOperand, szComment, nVal, pszName)) {
+        ErrorGen("Unrecognized size of variable ", NULL);
+    }
+
+    GenAsmOut(NULL, szOpcode, szOperand, szComment, TRUE);
+}
+
+
+static void GenDataObject(LPSTR pszName, TPDeclSpec pTarget, TPExprNode pInit) {
+    
+    switch (pTarget->Usage) {
+        case    DecId:          // Id
+        case    DecFunc:        // Function 
+            printf("GenDataObject():  Unexpected Useage '%d'\n", pTarget->Usage);
+            return;
+
+        case    DecArray:
+            GenDataObjectArray(pszName, pTarget, pInit);
+            return;
+
+        case    DecPtr:
+            GenDataObjectPointer(pszName, pTarget, pInit);
+            return;
+
+        case    DecSpec:
+            if ((pTarget->Use.DecSpec.Type) & TypeSTRUCT) {
+                LpStructSet p = pTarget->Use.DecSpec.pPtr;
+                if (p->fUnion) GenDataObjectUnion(pszName, pTarget, pInit);
+                else           GenDataObjectStructure(pszName, pTarget, pInit);
+                return;
+            }
+            else if ((pTarget->Use.DecSpec.Type) & TypeENUM) {
+                TPEnumSet e = pTarget->Use.DecSpec.pPtr;
+                GenDataObjectEnum(pszName, pTarget, pInit);
+                return;
+            }
+            else if ((pTarget->Use.DecSpec.Type) & TypeTYPEDEF) {
+                GenDataObjectTypedef(pszName, pTarget, pInit);
+                return;
+            }
+            else {
+                GenDataObjectBasetype(pszName, pTarget, pInit);
+                return;
+            }
+            return;
+
+        default:
+            printf("GenBssObjectComment(): Unknown Useage '%d'\n", pTarget->Usage);
+            return;
+        }
+
+}
+
+
+void GenData(TPDeclSpec pDecl) {
+    //char szOperand[32];
+    TPDeclSpec pDeclList;
+
+    GenAsmOut(NULL, ".segment", "DATA", "=== Start of DATA segment ===", TRUE);
+
+    for (pDeclList = pDecl; pDeclList; pDeclList = pDeclList->pChain) {
+        if ((pDeclList->Usage == DecId) &&
+            GenIsData(pDeclList->Use.DecId.pTarget->Usage) &&
+            (pDeclList->Use.DecId.pszInitializedStr)) {
+
+            GenAsmOut(pDeclList->Use.DecId.pszName, NULL, NULL, "", FALSE);
+            GenObjectComment(pDeclList->Use.DecId.pTarget);
+            GenDataObjectString(pDeclList->Use.DecId.pTarget, pDeclList->Use.DecId.pszInitializedStr);
+        }
+    }
+
+    for (pDeclList = pDecl; pDeclList; pDeclList = pDeclList->pChain) {
+        if ((pDeclList->Usage == DecId) &&
+            GenIsData(pDeclList->Use.DecId.pTarget->Usage) &&
+            (pDeclList->Use.DecId.pInitializer)) {
+
+            GenAsmOut(pDeclList->Use.DecId.pszName, NULL, NULL, "", FALSE);
+            GenObjectComment(pDeclList->Use.DecId.pTarget);
+            GenDataObject(pDeclList->Use.DecId.pszName, pDeclList->Use.DecId.pTarget, pDeclList->Use.DecId.pInitializer);
+        }
+    }
+
+    GenAsmOut(NULL, ".endseg", NULL, "=== End of DATA segment ===\n", TRUE);
+
+}
+
+// ##########################################################################################
+// Bss segment generator
+
+
+void GenBss(TPDeclSpec pDecl) {
+    char szOperand[32];
+
+    GenAsmOut(NULL, ".segment", "BSS", "=== Start of BSS segment ===", TRUE);
+
+    for (; pDecl; pDecl = pDecl->pChain) {
+        if ((pDecl->Usage == DecId) &&
+            GenIsData(pDecl->Use.DecId.pTarget->Usage) &&
+            !(pDecl->Use.DecId.pszInitializedStr || pDecl->Use.DecId.pInitializer)) {
+            sprintf(szOperand, "%4d", CalcSizeOf(pDecl->Use.DecId.pTarget));
+            GenAsmOut(pDecl->Use.DecId.pszName, ".space", szOperand, "", FALSE);
+            GenObjectComment(pDecl->Use.DecId.pTarget);
+        }
+    }
+
+    GenAsmOut(NULL, ".endseg", NULL, "=== End of BSS segment ===\n", TRUE);
+
+}
+
+/* eof */

@@ -1,0 +1,8 @@
+
+
+LPSTR   GenLabel(LPSTR PreFix);
+
+void    GenData(TPDeclSpec pDecl);
+void    GenBss(TPDeclSpec pDecl);
+
+/* eof */

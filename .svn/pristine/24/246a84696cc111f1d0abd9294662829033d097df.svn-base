@@ -1,0 +1,60 @@
+
+// long foo(int a) {
+//    return a++;
+// }
+
+//void bar1(int a) {
+//    return a++;
+//}
+//
+//int bar2(int a) {
+//    return;
+//}
+
+//char * bar3(char a) {
+//    return a;
+//}
+
+// bar4(long a) {
+//     return a;
+// }
+
+// void main(void) {
+//     int a;
+// //    a = foo(a);
+// }
+
+//int foo(long a, char b, ...) {
+//    return a+1;
+//}
+//
+//int p1, p2, p3;
+//
+//void main(void) {
+//    foo;
+//    foo();
+//    foo(p1);
+//    foo(p1,p2);
+//    foo(p1,p2,p3);
+//    foo(p1,p2,p3, 22);
+//}
+
+int foo(char pc1, short ps2, ...);
+void bar(void);
+
+void main(void) {
+    char c;
+//  foo(c);
+    foo(c,c);
+    foo(c,c,c,(long)c);
+    
+}
+
+int foo(char new_pc01, short new_ps2, ...) {
+    return new_pc01 + new_ps2;    
+}
+
+void bar(void) {
+    foo(1,2);
+}
+

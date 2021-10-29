@@ -1,0 +1,15 @@
+﻿  GenExpression.c
+   Logical operations generate values. Change this to branch targets.
+      GenAdd: right var = const is a common special case.
+      GenSub: right var = const is a common special case.
+      GenMul: right var = const is a common special case.
+      GenDiv: right var = const is a common special case.
+      GenMod: right var = const is a common special case.
+      GenAnd: right var = const is a common special case.
+      GenXor: right var = const is a common special case.
+      GenOr: right var = const is a common special case.
+      GenShiftR: right var = const is a common special case.
+      GenShiftL: right var = const is a common special case.
+      GenExprAssign: var = const is a common special case.
+  CC_Avr.vcxproj -> D:\DL\sean\RoyalHolloway\2019\CC_Avr\Debug\CC_Avr.exe
+  CC_Avr.vcxproj -> D:\DL\sean\RoyalHolloway\2019\CC_Avr\Debug\CC_Avr.pdb (Full PDB)

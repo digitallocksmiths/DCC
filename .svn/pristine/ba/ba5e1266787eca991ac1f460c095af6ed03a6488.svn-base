@@ -1,0 +1,32 @@
+
+int w,x,y,z;    
+
+// void adds(void) {
+//  
+//     w+x+y+z;
+//     ((w+x)+y)+z;
+//     w+(x+(y+z));
+// }
+// 
+// void subs(void) {
+//  
+//     w-x-y-z;
+//     ((w-x)-y)-z;
+//     w-(x-(y-z));
+// }
+
+void main(void) {
+ 
+//    0 + w+x+y+z;
+//    (((1+w)+x)+y)+z;            // good
+      (((1+w)+x)+1)+z;          // good
+  
+//    w+(x+(y+z));              // good
+      1+(w+(x+(1+z)));
+}
+
+
+
+
+
+

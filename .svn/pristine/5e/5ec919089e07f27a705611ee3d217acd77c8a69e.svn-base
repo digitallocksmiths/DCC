@@ -1,0 +1,1126 @@
+#include <conio.h>
+#include <stdio.h>
+#include <ctype.h>
+#include <signal.h>
+#include <setjmp.h>
+#include <stdlib.h>
+#include <memory.h>
+#include <string.h>
+#include <assert.h>
+#include <Windows.h>
+
+//#include <ext\types.h>
+
+#include "C_Yacced.tab.h"
+#include "lex.h"
+#include "typectrl.h"
+#include "expr.h"
+#include "main.h"
+
+/* *********************************************** */
+
+/* *********************************************** */
+
+/********************/
+/* ENUM descriptors */
+/********************/
+
+TPEnumSet   Enums = NULL;
+
+static BOOL
+FindEnum(TPEnumElement El, LPSTR Name) {
+    for (;El;El=El->pNext) {
+        if (!strcmp(El->pszElementName, Name)) return TRUE;
+    }
+    return FALSE;
+ }
+    
+
+TPEnumElement EnumElementFind(LPSTR pszName) {
+    TPEnumSet       Set;
+    TPEnumElement   El;
+    for (Set=Enums; Set; Set=Set->pNext)
+        for (El=Set->pElements; El; El=El->pNext)
+            if (!strcmp(El->pszElementName, pszName))
+                return El;
+    return NULL;
+ }
+ 
+static BOOL
+EnumDuplicate(LPSTR Name) {
+    return (EnumElementFind(Name)) ? TRUE : FALSE;
+ }
+
+TPEnumElement EnumElementMake(LPSTR pszName, TPExprNode pExpr) {
+    TPEnumElement NewEl;
+    if (EnumDuplicate(pszName)) Error1("Duplicate Enumeration Constant", pszName);
+    NewEl = New(sizeof(TEnumElement));
+    NewEl->pszElementName  = pszName;
+    NewEl->fAssigned     = FALSE;
+    if (pExpr) {
+        NewEl->fAssigned = TRUE;
+        NewEl->dwValue    = ConstInt(pExpr);
+    }
+    NewEl->pNext         = NULL;
+    return NewEl;
+ }
+
+
+TPEnumElement EnumElementAdd(TPEnumElement pList, TPEnumElement pNew) {
+    TPEnumElement Old = pList;
+    if (FindEnum(pList,pNew->pszElementName))  Error1("Repeated Enumeration Constant", pNew->pszElementName);
+    if (!pList) {
+        if (!pNew->fAssigned) pNew->dwValue = 0;
+        return pNew;
+    }
+    for (;Old->pNext;Old = Old->pNext);
+    Old->pNext = pNew;
+    if (!pNew->fAssigned) pNew->dwValue = 1+Old->dwValue;
+    pNew->pNext = NULL;
+    return pList;
+ }
+
+
+#ifdef _DEBUG
+void EnumElementPrintList(TPEnumElement pEl) {
+    printf("[ ");
+    for (;pEl;pEl=pEl->pNext) {
+        printf("%s=%d%c ", pEl->pszElementName, pEl->dwValue, (pEl->pNext)?',':' ');
+    }
+    printf("] ");
+ }
+#endif //_DEBUG
+
+TPEnumSet
+FindEnumSet(LPSTR Name) {
+    TPEnumSet Set=Enums;
+    if (!strcmp(Name,"")) return NULL;                          // always fail with anonimous Set
+    for (;(Set && strcmp(Name,Set->pszSetName)); Set=Set->pNext) ;  // try find others
+    return Set;
+ }
+
+TPEnumSet EnumSetAdd(LPSTR szName, TPEnumElement pElements) {
+    TPEnumSet NewSet;
+    if ((NewSet = FindEnumSet(szName)) == NULL) {                 // non existant so make new one
+        NewSet = New(sizeof(TEnumSet));
+        NewSet->pszSetName  = szName;
+        NewSet->pElements = pElements;
+        NewSet->pNext     = Enums;
+        Enums = NewSet;
+    } else {
+        if (NewSet->pElements == NULL) {                         // first definition after a forward referance
+            NewSet->pElements = pElements;
+        } else {
+            if (pElements != NULL) {                             // Attempted redefinition
+                Error0("Redefinition of Enumerated Set ",szName);
+            } else {
+                ;                                               // backwards reference. OK ... do nowt
+            }
+                
+        }
+    }
+    return NewSet;
+ }
+
+#ifdef _DEBUG
+
+void EnumSetPrint(TPEnumSet pSet) {
+    printf("Enum\t'%s'\t", pSet->pszSetName);
+    EnumElementPrintList(pSet->pElements);
+}
+
+void EnumSetPrintList(void) {
+    TPEnumSet Set=Enums;
+    printf("EMUMS\n");
+    for (;Set; Set=Set->pNext) {
+        EnumSetPrint(Set);
+        printf("\n");
+    }
+    printf("\n");
+
+}
+#endif // _DEBUG
+
+/****************************/
+/* STRUCT/UNION descriptors */
+/****************************/
+
+LpStructSet Structs = NULL;
+
+LpStructSet
+FindStructSet(LPSTR Name) {
+    LpStructSet Set=Structs;
+    if (!strcmp(Name,"")) return NULL;                          // always fail with anonimous Set
+    for (;(Set && strcmp(Name,Set->SetName)); Set=Set->Next) ;  // try find others
+    return Set;
+}
+
+LpStructSet
+AddStructSet(LPSTR Name, BOOL Union, TPDeclSpec Elements) {
+    LpStructSet NewSet;
+    if ((NewSet = FindStructSet(Name)) == NULL) {               // non existant so make new one
+        NewSet = New(sizeof(StructSet));
+        NewSet->SetName  = Name;
+        NewSet->Union    = Union;
+        NewSet->Elements = Elements;
+        NewSet->Next     = Structs;
+        Structs          = NewSet;
+    } else {
+        if ((NewSet->Union == Union) &&
+            (NewSet->Elements == NULL)) {                       // first definition after a forward reference
+            NewSet->Elements = Elements;
+        } else {
+            if (Elements != NULL) {                             // Attempted redefinition
+                Error0("Redefinition of Struct/Union ",Name);
+            } else {
+                ;                                               // backwards reference. OK ... do nowt
+            }
+                
+        }
+    }
+    return NewSet;
+}
+
+
+#ifdef _DEBUG
+
+static void
+PrintStructSet(LpStructSet Set, BOOL Expand) {
+    if (Set->Union) printf("Union\t");
+    else            printf("Struct\t");
+    printf("'%s'", Set->SetName);
+    if (Expand) {
+        printf("\t{\n");
+        ParseDeclSpec(Set->Elements, TRUE);
+        printf("}");
+    }
+}
+
+
+void
+PrintStructSets(void) {
+    LpStructSet Set = Structs;
+    printf("STRUCTS\n");
+    for (;Set;Set=Set->Next) {
+        PrintStructSet(Set,TRUE);
+        printf("\n");
+    }
+    printf("\n");
+}
+
+#endif // _DEBUG
+
+
+
+/* ******************************************************* */
+/*  General Type Housekeeping  */
+/* *************************** */
+
+static TPDeclSpec
+NewDeclSpec(TUsage Use) {
+    TPDeclSpec NewEl;
+    NewEl = New(sizeof(TDeclSpec));
+    NewEl->Usage = Use;
+    NewEl->Chain = NULL;
+    return NewEl;
+ }
+
+
+static TPDeclSpec
+NewSpecBlank(TUsage Use) {
+    TPDeclSpec NewEl;
+    NewEl = NewDeclSpec(Use);
+    switch (Use) {
+        case DecSpec:   NewEl->Use.DecSpec.Class  = 0;
+                        NewEl->Use.DecSpec.Type   = 0;
+                        NewEl->Use.DecSpec.Qual   = 0;
+                        NewEl->Use.DecSpec.Ptr    = NULL;
+                        break;
+        default:        printf("NewSpecBlank: %d is unknown !\n",(int)Use);
+                        break;
+    }
+    return NewEl;
+ }
+
+/* ******************************************************* */
+/*  Basic Types  */
+/* ************* */
+
+static WORD
+DeclClass( WORD Set, WORD Element) {
+    if (Set && (Set != Element))
+        Warning0("More than one storage class specified", "");
+    else
+        Set |= Element;
+    return Set;
+ }
+
+
+
+
+static WORD
+DeclType(WORD Set, WORD Element) {
+    if (((Element == TypeVOID)    && (Set & (         TypeCHAR|TypeINT|TypeFLOAT|TypeDOUBLE|TypeSIGNED|TypeUNSIGNED|TypeSHORT|TypeLONG))) ||
+        ((Element == TypeCHAR)    && (Set & (TypeVOID|         TypeINT|TypeFLOAT|TypeDOUBLE                                           ))) ||
+        ((Element == TypeINT)     && (Set & (TypeVOID|TypeCHAR|        TypeFLOAT|TypeDOUBLE                                           ))) ||
+        ((Element == TypeFLOAT)   && (Set & (TypeVOID|TypeCHAR|TypeINT|          TypeDOUBLE|TypeSIGNED|TypeUNSIGNED|TypeSHORT|TypeLONG))) ||
+        ((Element == TypeDOUBLE)  && (Set & (TypeVOID|TypeCHAR|TypeINT|TypeFLOAT|           TypeSIGNED|TypeUNSIGNED|TypeSHORT         ))) ||
+        ((Element == TypeSHORT)   && (Set & (TypeVOID|TypeCHAR|        TypeFLOAT|TypeDOUBLE|                                  TypeLONG))) ||
+        ((Element == TypeLONG)    && (Set & (TypeVOID|TypeCHAR|        TypeFLOAT|                                   TypeSHORT         ))) ||
+        ((Element == TypeSIGNED)  && (Set & (TypeVOID|                 TypeFLOAT|TypeDOUBLE|           TypeUNSIGNED                   ))) ||
+        ((Element == TypeUNSIGNED)&& (Set & (TypeVOID|                 TypeFLOAT|TypeDOUBLE|TypeSIGNED                                ))) ||
+        ((Element == TypeENUM)    && (Set & (TypeVOID|TypeCHAR|TypeINT|TypeFLOAT|TypeDOUBLE|TypeSIGNED|TypeUNSIGNED|TypeSHORT|TypeLONG))) ||
+        ((Element == TypeSTRUCT)  && (Set & (TypeVOID|TypeCHAR|TypeINT|TypeFLOAT|TypeDOUBLE|TypeSIGNED|TypeUNSIGNED|TypeSHORT|TypeLONG))) ||
+        ((Element == TypeTYPEDEF) && (Set & (TypeVOID|TypeCHAR|TypeINT|TypeFLOAT|TypeDOUBLE|TypeSIGNED|TypeUNSIGNED|TypeSHORT|TypeLONG))))
+            Warning0("Type declaration contains contradictory properties", "");
+    else Set |= Element;
+    return Set;
+ }
+
+static WORD
+DeclQual(WORD Set, WORD Element) {
+    if ((Set == 0) || (Set == Element)) return Element;
+    Warning0("Type Qualification contains contradictory properties", "");
+    return Set;
+ }
+
+static LPVOID
+DeclPtr(LPVOID Set, LPVOID Element) {
+    if (Set == 0) return Element;
+    Warning0("Complex Type Qualification contains contradictory properties", "");
+    return Set;
+ }
+
+TPDeclSpec
+NewSpecClass(WORD Class) {
+    TPDeclSpec NewEl = NewSpecBlank(DecSpec);
+    NewEl->Use.DecSpec.Class = Class;
+    return NewEl;
+ }  
+ 
+TPDeclSpec
+NewSpecType(WORD Type, LPVOID Ptr) {
+    TPDeclSpec NewEl = NewSpecBlank(DecSpec);
+    NewEl->Use.DecSpec.Type = Type;
+    NewEl->Use.DecSpec.Ptr  = Ptr;
+    return NewEl;
+ }
+
+TPDeclSpec
+NewSpecQual(WORD Qual) {
+    TPDeclSpec NewEl = NewSpecBlank(DecSpec);
+    NewEl->Use.DecSpec.Qual = Qual;
+    return NewEl;
+ }
+
+static TPDeclSpec FindTarget(TPDeclSpec Ptr) {
+    while (Ptr) {
+        switch (Ptr->Usage) {
+            case DecId:
+                 Ptr = Ptr->Use.DecId.pTarget;
+                 break;
+            case DecSpec:
+                 return Ptr;
+            case DecPtr:
+                 Ptr = Ptr->Use.DecPtr.pTarget;
+                 break;
+            case DecArray:
+                 Ptr = Ptr->Use.DecArray.pTarget;
+                 break;
+            case DecFunc:
+                 Ptr = Ptr->Use.DecFunc.pTarget;
+                 break;
+            default:
+                printf("FindTarget: Unknown Use [%02x]\n", Ptr->Usage);
+                return Ptr;
+        }
+    }
+    assert(FALSE);
+    return 0;
+ }
+
+
+TPDeclSpec
+ConcatDeclSpec(TPDeclSpec Old, TPDeclSpec New) {
+    TPDeclSpec O=FindTarget(Old);
+    TPDeclSpec N=FindTarget(New);
+    if (O->Usage != DecSpec) printf("ConcatDeclSpec: What 1!\n");
+    if (N->Usage != DecSpec) printf("ConcatDeclSpec: What 2!\n");
+    if (N->Use.DecSpec.Class)
+        O->Use.DecSpec.Class = DeclClass(O->Use.DecSpec.Class,N->Use.DecSpec.Class); 
+    if (N->Use.DecSpec.Type)
+        O->Use.DecSpec.Type  = DeclType( O->Use.DecSpec.Type, N->Use.DecSpec.Type);
+    if (N->Use.DecSpec.Qual)
+        O->Use.DecSpec.Qual  = DeclQual( O->Use.DecSpec.Qual, N->Use.DecSpec.Qual); 
+    if (N->Use.DecSpec.Ptr)
+        O->Use.DecSpec.Ptr   = DeclPtr(  O->Use.DecSpec.Ptr,  N->Use.DecSpec.Ptr); 
+    return Old;
+ }
+
+/* ******************************************** */
+
+TPDeclSpec
+NewPointer(TPDeclSpec Qualifier, TPDeclSpec Target) {
+    WORD       q;
+    if (!Qualifier) Qualifier = NewSpecQual(0);
+    q = Qualifier->Use.DecSpec.Qual;
+    Qualifier->Usage = DecPtr;                      // recycle as pointer
+    Qualifier->Use.DecPtr.pTarget = Target;          // recycle as pointer
+    Qualifier->Use.DecPtr.Qual   = q;               // recycle as pointer
+    return Qualifier;
+ }
+
+TPDeclSpec
+NewIdentifier(LPSTR Name) {
+    TPDeclSpec N;
+    N = NewDeclSpec(DecId);
+    N->Use.DecId.pszName = Name;
+    N->Use.DecId.pTarget = NULL;
+    N->Use.DecId.pszInitializedStr = NULL;
+    N->Use.DecId.pInitializer = NULL;
+    N->Use.DecId.pBrother = NULL;
+    return N;
+ }
+
+TPDeclSpec NewArray(TPDeclSpec Dec, TPExprNode Expr) {
+    TPDeclSpec N;
+    N = NewDeclSpec(DecArray);
+    if (Expr) {
+        if (Expr->Usage != uConst) {
+            //ParseExpr(Expr, 0);
+            Error0("Constant required for Array Dimentions.","");
+            N->Use.DecArray.Size = 0;
+        } else {
+            N->Use.DecArray.Size = ConstInt(Expr);
+        }
+    } else {
+            N->Use.DecArray.Size = 0;
+    }
+    N->Use.DecArray.pTarget = NULL;
+    return AppendDecl(Dec,N);
+ }
+
+TPDeclSpec
+NewFunc(TPDeclSpec Dec, LPVOID PList, LPVOID IdList) {
+    TPDeclSpec N;
+    N = NewDeclSpec(DecFunc);
+    N->Use.DecFunc.PList  = PList;
+    N->Use.DecFunc.IdList = IdList;
+    N->Use.DecFunc.pTarget = NULL;
+    return AppendDecl(Dec,N);
+ }
+
+
+TPDeclSpec AddInitializerStr(TPDeclSpec pDec, LPSTR pStr) {
+    if (pDec->Usage != DecId) {
+        printf("AddInitializer: Error1\n");
+        return pDec;
+    }
+    pDec->Use.DecId.pszInitializedStr = pStr;
+    //PrintInit(pStr); printf("\n");
+    return pDec;
+}
+
+
+TPDeclSpec  AddInitializer(TPDeclSpec pDec, TPExprNode pInit) {
+    if (pDec->Usage != DecId) {
+        printf("AddInitializer: Error1\n");
+        return pDec;
+    }
+    pDec->Use.DecId.pInitializer = pInit;
+    //PrintInit(pInit); printf("\n");
+    return pDec;
+ }
+
+
+TPDeclSpec
+AppendDecl(TPDeclSpec a,TPDeclSpec b) {
+    TPDeclSpec c = a;
+    if (!c) return b;
+    for (;;) {
+        switch (c->Usage) {
+            case    DecId:
+                    if (c->Use.DecId.pBrother) AppendDecl(c->Use.DecId.pBrother, b);
+                    if (c->Use.DecId.pTarget) {
+                        c = c->Use.DecId.pTarget;
+                        break;
+                    }  else {
+                        c->Use.DecId.pTarget = b;
+                        return a;
+                    }
+                    break;
+            case    DecSpec:
+                    printf("AppendDecl: Trouble append to Spec\n");
+                    return a;
+            case    DecPtr:
+                    if (c->Use.DecPtr.pTarget) {
+                        c = c->Use.DecPtr.pTarget;
+                        break;
+                    }  else {
+                        c->Use.DecPtr.pTarget = b;
+                        return a;
+                    }
+                    break;
+            case    DecArray:
+                    if (c->Use.DecArray.pTarget) {
+                        c = c->Use.DecArray.pTarget;
+                        break;
+                    }  else {
+                        c->Use.DecArray.pTarget = b;
+                        return a;
+                    }
+                    break;
+            case    DecFunc:
+                    if (c->Use.DecFunc.pTarget) {
+                        c = c->Use.DecFunc.pTarget;
+                        break;
+                    }  else {
+                        c->Use.DecFunc.pTarget = b;
+                        return a;
+                    }
+                    break;
+            default:
+                    printf("AppendDecl: Unknown Use\n");
+                    break;
+        }
+    }
+ }
+
+TPDeclSpec
+MakeBrother(TPDeclSpec a,TPDeclSpec b) {
+    TPDeclSpec c;
+    if (a->Usage != DecId || b->Usage != DecId) {
+        printf("MakeBrother: Error1\n");
+        return a;
+    }
+    for (c=a; c->Use.DecId.pBrother != NULL; c=c->Use.DecId.pBrother);
+    c->Use.DecId.pBrother=b;
+    return a;
+ }
+
+
+
+#ifdef _DEBUG
+ 
+#define putch(x) putc((x),stdout) 
+ 
+static void
+DescClass(WORD q) {
+    printf("Class[");
+    putch((q & ClassAUTO)       ? 'A':'_');
+    putch((q & ClassREGISTER)   ? 'R':'_');
+    putch((q & ClassSTATIC)     ? 'S':'_');
+    putch((q & ClassEXTERN)     ? 'E':'_');
+    putch((q & ClassTYPEDEF)    ? 'T':'_');
+    putch(']');
+}
+
+static void
+DescType(WORD q) {
+    printf("type[");
+    if(q & TypeUNSIGNED) printf("unsigned ");
+    if(q & TypeSIGNED)   printf("signed ");
+    if(q & TypeDOUBLE)   printf("double ");
+    if(q & TypeFLOAT)    printf("float ");
+    if(q & TypeLONG)     printf("long ");
+    if(q & TypeINT)      printf("int ");
+    if(q & TypeSHORT)    printf("short ");
+    if(q & TypeCHAR)     printf("char ");
+    if(q & TypeVOID)     printf("void ");
+    putch(']');
+}
+
+static void
+DescQual(WORD q) {
+    printf("Qual[");
+    putch((q & QualCONST)   ? 'C':'_');
+    putch((q & QualVOLATILE)? 'V':'_');
+    putch((q & QualNEAR)    ? 'N':'_');
+    putch((q & QualFAR)     ? 'F':'_');
+    putch(']');
+}
+
+void ParseDeclSpec(TPDeclSpec pDecl, BOOL fDoBrothers) {
+    if (!pDecl) {
+            printf("..Null..\n");
+            return;
+    } else {
+        switch (pDecl->Usage) {
+            case    DecId:          // Id
+                    printf("\t'%s'\t",pDecl->Use.DecId.pszName);
+                    ParseDeclSpec(pDecl->Use.DecId.pTarget, FALSE);
+                    if (pDecl->Use.DecId.pszInitializedStr) {
+                        printf("I = STRING\n");
+                    }
+                    if (pDecl->Use.DecId.pInitializer) {
+                            printf("I = "); PrintInit(pDecl->Use.DecId.pInitializer); printf("\n");
+                    }
+                    //ParseDeclSpec(pDecl->Use.DecId.pTarget, fDoBrothers);
+                    if (fDoBrothers && pDecl->Use.DecId.pBrother) {
+                        ParseDeclSpec(pDecl->Use.DecId.pBrother, fDoBrothers);
+                    }
+                    return;
+            case    DecSpec:
+                    if      ((pDecl->Use.DecSpec.Type) & TypeSTRUCT)  { PrintStructSet(pDecl->Use.DecSpec.Ptr,FALSE); DescQual(pDecl->Use.DecSpec.Qual); }
+                    else if ((pDecl->Use.DecSpec.Type) & TypeENUM)    { EnumSetPrint(pDecl->Use.DecSpec.Ptr);         DescQual(pDecl->Use.DecSpec.Qual); }
+                    else if ((pDecl->Use.DecSpec.Type) & TypeTYPEDEF) { printf("Typedef "); ParseDeclSpec(pDecl->Use.DecSpec.Ptr,fDoBrothers); }
+                    else                                            { DescClass(pDecl->Use.DecSpec.Class); DescType(pDecl->Use.DecSpec.Type); DescQual(pDecl->Use.DecSpec.Qual); }
+                    printf("\n");
+                    return;
+            case    DecPtr:
+                    printf("P");  DescQual(pDecl->Use.DecPtr.Qual); printf("-> "); 
+                    ParseDeclSpec(pDecl->Use.DecPtr.pTarget, fDoBrothers);
+                    return;
+            case    DecArray:
+                    printf("A[%ld]-> ", pDecl->Use.DecArray.Size);
+                    ParseDeclSpec(pDecl->Use.DecArray.pTarget, fDoBrothers);
+                    return;
+            case    DecFunc:
+                    printf("F(...)<= ");
+                    ParseDeclSpec(pDecl->Use.DecFunc.pTarget, fDoBrothers);
+                    return;
+            default:
+                    printf("ParseDeclSpec: Unknown Use\n");
+                    return;
+        }
+    }
+}
+
+
+#endif // _DEBUG
+
+
+/* ***************************************************************** */
+/*  Declarations  */
+/* ************** */
+
+static TPDeclSpec
+DuplicateD(TPDeclSpec Ptr) {
+    TPDeclSpec New;
+    New = NewDeclSpec(Ptr->Usage);
+    *New = *Ptr;
+    return New;
+ }
+
+static TPDeclSpec
+DuplicateDecl(TPDeclSpec Ptr) {
+    TPDeclSpec Start,Latest;
+    if (!Ptr) return NULL;
+    Start = Latest = DuplicateD(Ptr);
+    while (Latest) {
+        switch (Latest->Usage) {
+            case DecId:
+                    Latest->Use.DecId.pTarget = DuplicateD(Latest->Use.DecId.pTarget);
+                    Latest = Latest->Use.DecId.pTarget;
+                    break;
+            case DecSpec:
+                    return Start;
+                    break;
+            case DecPtr:
+                    Latest->Use.DecPtr.pTarget = DuplicateD(Latest->Use.DecPtr.pTarget);
+                    Latest = Latest->Use.DecPtr.pTarget;
+                    break;
+            case DecArray:
+                    Latest->Use.DecArray.pTarget = DuplicateD(Latest->Use.DecArray.pTarget);
+                    Latest = Latest->Use.DecArray.pTarget;
+                    break;
+            case DecFunc:
+                    Latest->Use.DecFunc.pTarget = DuplicateD(Latest->Use.DecFunc.pTarget);
+                    Latest = Latest->Use.DecFunc.pTarget;
+                    break;
+            default:
+                printf("DuplicateDecl: Unknown Use [%02x]\n", Latest->Usage);
+                return 0L;
+        }
+    }
+    assert(FALSE);
+    return 0;
+}
+
+
+static BOOL
+IsClassProperty(TPDeclSpec Ptr, WORD Property) {
+    while (Ptr) {
+        switch (Ptr->Usage) {
+            case DecId:
+                    Ptr = Ptr->Use.DecId.pTarget;
+                    break;
+            case DecSpec:
+                    return (Ptr->Use.DecSpec.Class & Property);
+                    break;
+            case DecPtr:
+                    Ptr = Ptr->Use.DecPtr.pTarget;
+                    break;
+            case DecArray:
+                    Ptr = Ptr->Use.DecArray.pTarget;
+                    break;
+            case DecFunc:
+                    Ptr = Ptr->Use.DecFunc.pTarget;
+                    break;
+            default:
+                printf("IsClassProperty: Unknown Use [%02x]\n", Ptr->Usage);
+                return 0L;
+        }
+    }
+    return FALSE;
+ }
+
+#define IsAuto(Ptr)     IsClassProperty(Ptr, ClassAUTO)
+#define IsRegister(Ptr) IsClassProperty(Ptr, ClassREGISTER)
+#define IsStatic(Ptr)   IsClassProperty(Ptr, ClassSTATIC)
+#define IsExtern(Ptr)   IsClassProperty(Ptr, ClassEXTERN)
+#define IsTypedef(Ptr)  IsClassProperty(Ptr, ClassTYPEDEF)
+
+static void
+StripClassProperty(TPDeclSpec Ptr, WORD Property) {
+    while (Ptr) {
+        switch (Ptr->Usage) {
+            case DecId:
+                    Ptr = Ptr->Use.DecId.pTarget;
+                    break;
+            case DecSpec:
+                    Ptr->Use.DecSpec.Class &= ~Property;
+                    return;
+            case DecPtr:
+                    Ptr = Ptr->Use.DecPtr.pTarget;
+                    break;
+            case DecArray:
+                    Ptr = Ptr->Use.DecArray.pTarget;
+                    break;
+            case DecFunc:
+                    Ptr = Ptr->Use.DecFunc.pTarget;
+                    break;
+            default:
+                printf("StripClassProperty: Unknown Use [%02x]\n", Ptr->Usage);
+                return;
+        }
+    }
+    return;
+ }
+
+#define StripAuto(Ptr)     StripClassProperty(Ptr, ClassAUTO)
+#define StripRegister(Ptr) StripClassProperty(Ptr, ClassREGISTER)
+#define StripStatic(Ptr)   StripClassProperty(Ptr, ClassSTATIC)
+#define StripExtern(Ptr)   StripClassProperty(Ptr, ClassEXTERN)
+#define StripTypedef(Ptr)  StripClassProperty(Ptr, ClassTYPEDEF)
+
+static BOOL
+CompDeclStruct(TPDeclSpec a, TPDeclSpec b) {
+    while (a && b) {
+        if (a->Usage != b->Usage) return FALSE;
+        switch (a->Usage) {
+            case DecId:
+                    a = a->Use.DecId.pTarget;
+                    b = b->Use.DecId.pTarget;
+                    break;
+            case DecSpec:
+                    return TRUE;
+            case DecPtr:
+                    a = a->Use.DecPtr.pTarget;
+                    b = b->Use.DecPtr.pTarget;
+                    break;
+            case DecArray:
+                    a = a->Use.DecArray.pTarget;
+                    b = b->Use.DecArray.pTarget;
+                    break;
+            case DecFunc:
+                    a = a->Use.DecFunc.pTarget;
+                    b = b->Use.DecFunc.pTarget;
+                    break;
+            default:
+                printf("CompDeclStruct: Unknown Use [%02x]\n", a->Usage);
+                return FALSE;
+        }
+    }
+    assert(FALSE);
+    return 0;
+ }
+
+
+BOOL
+CompDecl(TPDeclSpec a, TPDeclSpec b) {
+    for (;;) {
+        if (a->Usage == DecId) {                                         // case DecId
+           if (b->Usage != DecId)       return FALSE;
+           else {                       a = a->Use.DecId.pTarget;
+                                        b = b->Use.DecId.pTarget;
+           }
+        } else if (a->Usage == DecSpec) {                                // case DecSpec
+           if (b->Usage != DecSpec)     return FALSE;
+           else { if (a->Use.DecSpec.Type != b->Use.DecSpec.Type)                 return FALSE;
+                  if (!(a->Use.DecSpec.Type & (TypeSTRUCT|TypeENUM|TypeTYPEDEF))) return TRUE;
+                  if (a->Use.DecSpec.Ptr == b->Use.DecSpec.Ptr)                   return TRUE;
+                  return FALSE;
+           }
+        } else if (a->Usage == DecPtr) {                                 // case DecPtr
+           a = a->Use.DecPtr.pTarget;
+           if (b->Usage == DecArray)    b = b->Use.DecArray.pTarget;
+           else if (b->Usage == DecPtr) b = b->Use.DecPtr.pTarget;
+           else                         return FALSE;
+        } else if (a->Usage == DecArray) {                               // case DecArray
+           a = a->Use.DecArray.pTarget;
+           if (b->Usage == DecArray)    b = b->Use.DecArray.pTarget;
+           else if (b->Usage == DecPtr) b = b->Use.DecPtr.pTarget;
+           else                         return FALSE;
+        } else if (a->Usage == DecFunc) {                                // case DecFunc
+                                        a = a->Use.DecFunc.pTarget;
+                                        b = b->Use.DecFunc.pTarget;
+        } else {
+            printf("CompDecl: Unknown Use [%02x]\n", a->Usage);
+            return FALSE;
+        }
+    }
+ }
+
+
+
+static BOOL
+TestParams(TPDeclSpec a, TPDeclSpec b) {
+    TPDeclSpec p1 = a->Use.DecFunc.PList;                   // a param 1
+    TPDeclSpec p2 = b->Use.DecFunc.PList;                   // b param 1
+    if (p1 == NULL) {                                       // Empty ? ... fill it
+            a->Use.DecFunc.PList  = p2;
+            return TRUE;
+    }
+    if (p2 == NULL) {
+            b->Use.DecFunc.PList  = p1;
+            return TRUE;
+    }
+    while (p1 && p2) {
+        if (!strcmp(p1->Use.DecId.pszName,"...")) {            // Ellipsis ? ... fill it
+            *p1 = *p2;
+            return TRUE;
+        }
+        if (!strcmp(p2->Use.DecId.pszName,"...")) {
+            *p2 = *p1;
+            return TRUE;
+        }
+        if (!CompDecl(p1, p2))                              // Different ?
+            return FALSE;                                   // Scrap it !
+        p1 = p1->Use.DecId.pBrother;
+        p2 = p2->Use.DecId.pBrother;
+    }
+    return ((p1 == NULL) && (p2 == NULL));
+ }
+
+
+
+/* *************************************************** */
+
+TPDeclSpec  GlobalTypes;
+TPDeclSpec  LocalTypes;
+TPDeclSpec  GlobalObjects;
+TPDeclSpec  LocalObjects;
+
+static TPDeclSpec
+FindDecl(TPDeclSpec List, LPSTR Name) {
+    for ( ;
+          (List != NULL && strcmp(List->Use.DecId.pszName,Name));
+          List = List->Chain );
+    return List;
+ }
+
+TPDeclSpec
+FindType(LPSTR Name) {
+    TPDeclSpec L;
+    L = FindDecl(LocalTypes, Name);
+    if (!L) L = FindDecl(GlobalTypes, Name);
+    if (L)  StripTypedef(L);
+    return DuplicateDecl(L);
+}
+
+TPDeclSpec
+FindGlobalObject(LPSTR Name) {
+    return FindDecl(GlobalObjects, Name);
+}
+
+TPDeclSpec
+FindLocalObject(LPSTR Name) {
+    return FindDecl(LocalObjects, Name);
+}
+
+
+TPDeclSpec
+AddToDefintionList(TPDeclSpec List, TPDeclSpec Element) {
+    TPDeclSpec L;                               // list pointer
+    TPDeclSpec K,N;                             // known and new
+    Element->Chain = NULL;
+    if (List == NULL) return Element;
+    for (L=List;L->Chain != NULL; L = L->Chain) {
+        if (!strcmp(L->Use.DecId.pszName,Element->Use.DecId.pszName)) break;
+    }
+    if (!strcmp(L->Use.DecId.pszName,Element->Use.DecId.pszName)) {
+        // redefinition.
+        // Permit removal of extern flag
+        // keep quite if identical and extern
+        if (CompDeclStruct(L,Element)) {
+            K=FindTarget(L);
+            N=FindTarget(Element);
+            if ((K->Use.DecSpec.Type == N->Use.DecSpec.Type) &&                         // Type Match and
+                (K->Use.DecSpec.Qual == N->Use.DecSpec.Qual) &&                         // Qual Match and
+                (((K->Use.DecSpec.Type & (TypeSTRUCT|TypeENUM|TypeTYPEDEF)) == 0) ||    //    not a complicated type or
+                  (K->Use.DecSpec.Ptr == N->Use.DecSpec.Ptr))) {                        //    same complicated type
+                  if ((Element->Use.DecId.pTarget->Usage == DecFunc) &&                  // Treat Func definitions as extern !
+                      (TestParams(L->Use.DecId.pTarget, Element->Use.DecId.pTarget))) {   // As long as parampeters are OK.
+                        return List;
+                  } else if ((K->Use.DecSpec.Class == ClassEXTERN) ||                   // at least one is extern
+                             (N->Use.DecSpec.Class == ClassEXTERN)) {
+                        K->Use.DecSpec.Class &= N->Use.DecSpec.Class;
+                        return List;
+                  }
+            }
+        }
+        Warning0("Ignoring the redefiniion of ",Element->Use.DecId.pszName);
+    } else {
+        L->Chain = Element;
+    }
+    return List;
+ }
+
+#ifdef _DEBUG
+static void
+ListDefinitions(TPDeclSpec List) {
+    for (;List; List = List->Chain) {
+        ParseDeclSpec(List,FALSE);
+    }
+ }
+
+void
+ListGlobalTypes(void) {
+    printf("Global Types\n");
+    ListDefinitions(GlobalTypes);
+    printf("\n");
+}
+
+void
+ListLocalTypes(void) {
+    printf("Local Types\n");
+    ListDefinitions(LocalTypes);
+    printf("\n");
+}
+
+void
+ListGlobalObjects(void) {
+    printf("Global Objects\n");
+    ListDefinitions(GlobalObjects);
+    printf("\n");
+}
+
+void
+ListLocalObjects(void) {
+    printf("Local Objects\n");
+    ListDefinitions(LocalObjects);
+    printf("\n");
+}
+ 
+#endif // _DEBUG
+
+static DWORD    CalcStructSize(LpStructSet Struct);
+static BOOL     IsATypeDef(TPDeclSpec Ptr);
+
+void Declaration(TPDeclSpec pDecl, BOOL fGlobal) {
+    TPDeclSpec Tmp;
+    while (pDecl) {
+        if (!pDecl) {
+            printf("Declaration: Declare Nothing ?\n");
+            return;
+        }
+        if (pDecl->Usage != DecId) {
+            // printf("Unnamed elements cannot be declared !\n");
+            return;
+        }
+        
+        // printf("%s\t", (Ptr->Use.DecId.Initializer) ? "Init":"");
+        Tmp = pDecl->Use.DecId.pTarget;
+        if (IsTypedef(Tmp)) {
+            if (fGlobal) GlobalTypes = AddToDefintionList(GlobalTypes,pDecl);
+            else        LocalTypes  = AddToDefintionList(LocalTypes,pDecl);
+        } else {
+            CalcSizeOf(Tmp);
+            if (fGlobal) GlobalObjects = AddToDefintionList(GlobalObjects,pDecl);
+            else        LocalObjects  = AddToDefintionList(LocalObjects,pDecl);
+        }
+        pDecl = pDecl->Use.DecId.pBrother;
+
+    }
+ }
+
+
+static WORD
+PtrDest(TPDeclSpec Target) {
+    while (Target) {
+        switch (Target->Usage) {
+            case DecPtr:    return Target->Use.DecPtr.Qual;         // where is the pointer ?
+            case DecFunc:   return QualCONST;                       // Functions must be in constant
+            case DecSpec:   return Target->Use.DecSpec.Qual;        // Where is the base type ?
+            case DecArray:  Target = Target->Use.DecArray.pTarget;
+                            break;
+            default:        printf("PtrDest: Trouble [%d]\n", Target->Usage);
+                            return 0;
+        }
+    }
+    printf("PtrDest: Trouble ?\n");
+    assert(FALSE);
+    return 0;
+ }
+
+ 
+#define TT(P,T) (((P)->Use.DecSpec.Type & (T)) == (T))
+
+DWORD
+CalcSizeOf(TPDeclSpec Ptr) {
+    if (!Ptr) return 0L;
+    switch (Ptr->Usage) {
+        case    DecId:          // Id
+                printf("CalcSizeOf of DecId '%s' !!!\n",Ptr->Use.DecId.pszName);
+                return 0L;
+        case    DecPtr:
+                switch (PtrDest(Ptr->Use.DecPtr.pTarget)) {
+                    case QualCONST:         return SIZE_PTR_CONST;
+                    case QualVOLATILE:      return SIZE_PTR_VOLATILE;
+                    case QualNEAR:          return SIZE_PTR_NEAR;
+                    case QualFAR:           return SIZE_PTR_FAR;
+                    default:                return SIZE_PTR_DEFAULT;
+                }
+        case    DecArray:
+                return Ptr->Use.DecArray.Size * CalcSizeOf(Ptr->Use.DecArray.pTarget);
+        case    DecFunc:
+                return SIZE_FUNC;
+        case    DecSpec:
+                if      ((Ptr->Use.DecSpec.Type) & TypeENUM)    return 2L;
+                else if ((Ptr->Use.DecSpec.Type) & TypeSTRUCT)  return CalcStructSize(Ptr->Use.DecSpec.Ptr);
+                else if ((Ptr->Use.DecSpec.Type) & TypeTYPEDEF) return CalcSizeOf(Ptr->Use.DecSpec.Ptr);
+                else {
+                    if TT(Ptr,(TypeLONG|TypeDOUBLE))    return SIZE_LONGDOUBLE;
+                    if TT(Ptr,TypeDOUBLE)               return SIZE_DOUBLE;
+                    if TT(Ptr,TypeFLOAT)                return SIZE_FLOAT;
+                    if TT(Ptr,TypeLONG)                 return SIZE_LONG;
+                    if TT(Ptr,TypeSHORT)                return SIZE_SHORT;
+                    if TT(Ptr,TypeINT)                  return SIZE_INT;
+                    if TT(Ptr,TypeCHAR)                 return SIZE_CHAR;
+                    if TT(Ptr,TypeSIGNED)               return SIZE_INT;
+                    if TT(Ptr,TypeUNSIGNED)             return SIZE_INT;
+                    if TT(Ptr,TypeVOID)                 return SIZE_VOID;
+                    printf("CalcSizeOf: DecSpec.Type = %02x\n",Ptr->Use.DecSpec.Type);
+                    return 0L;
+                }
+        default:
+                printf("CalcSizeOf: Unknown Use\n");
+                return 0L;
+    }
+}
+
+
+static DWORD
+CalcStructSize(LpStructSet Struct) {
+    TPDeclSpec Elements = Struct->Elements;
+    DWORD Total = 0L;
+    if (!Elements)
+        Error0("Object contains undefined Struct/Union ",Struct->SetName);
+    if (Struct->Union) {
+        while (Elements) {
+            if (Elements->Usage != DecId) printf("CalcStructSize: U Problem !\n");
+            Total = __max(Total, CalcSizeOf(Elements->Use.DecId.pTarget));
+            Elements = Elements->Use.DecId.pBrother;
+        }
+    } else {
+        while (Elements) {
+            if (Elements->Usage != DecId) printf("CalcStructSize: S Problem !\n");
+            Total += CalcSizeOf(Elements->Use.DecId.pTarget);
+            Elements = Elements->Use.DecId.pBrother;
+        }
+    }
+    return Total;
+ }
+
+LONG
+CalcStructElementOffset(LpStructSet Struct, LPSTR Field) {
+    TPDeclSpec Elements = Struct->Elements;
+    LONG Total = 0L;
+    if (!Elements)
+        Error0("Object contains undefined Struct/Union ",Struct->SetName);
+    if (Struct->Union) {
+        while (Elements) {
+            if (Elements->Usage != DecId) printf("CalcStructElementOffset: U Problem !\n");
+            if (!strcmp(Field, Elements->Use.DecId.pszName)) return 0;
+            Elements = Elements->Use.DecId.pBrother;
+        }
+    } else {
+        while (Elements) {
+            if (Elements->Usage != DecId) printf("CalcStructElementOffset: S Problem !\n");
+            if (!strcmp(Field, Elements->Use.DecId.pszName)) return Total;
+            Total += CalcSizeOf(Elements->Use.DecId.pTarget);
+            Elements = Elements->Use.DecId.pBrother;
+        }
+    }
+    return -1;
+ }
+
+TPDeclSpec
+CalcStructElementType(LpStructSet Struct, LPSTR Field) {
+    TPDeclSpec Elements = Struct->Elements;
+    LONG Total = 0L;
+    if (!Elements) Error0("Object contains undefined Struct/Union ",Struct->SetName);
+    if (Struct->Union) {
+        while (Elements) {
+            if (Elements->Usage != DecId) printf("CalcStructElementType: U Problem !\n");
+            if (!strcmp(Field, Elements->Use.DecId.pszName)) return Elements->Use.DecId.pTarget;
+            Elements = Elements->Use.DecId.pBrother;
+        }
+    } else {
+        while (Elements) {
+            if (Elements->Usage != DecId) printf("CalcStructElementType: S Problem !\n");
+            if (!strcmp(Field, Elements->Use.DecId.pszName)) return Elements->Use.DecId.pTarget;
+            Elements = Elements->Use.DecId.pBrother;
+        }
+    }
+    return NULL;
+ }
+
+                                                            // *****************************************
+BOOL                                                        // Can the Type be represented in an integer
+IsIntegralType(TPDeclSpec Type) {                           // *****************************************
+    if (!Type) {
+        printf("IsIntegralType: Null.\n");
+        return FALSE;
+    }
+    switch (Type->Usage) {
+        case DecPtr:
+        case DecArray:
+        case DecFunc:   return TRUE;
+        case DecSpec:   return (!(Type->Use.DecSpec.Type &
+                                 (TypeVOID|TypeFLOAT|TypeDOUBLE|
+                               // TypeSTRUCT|TypeENUM|
+                                 TypeTYPEDEF)));
+        case DecId: 
+        default:        printf("IsIntegralType: What Usage [%d].\n",Type->Usage);
+                        return FALSE;
+    }
+}
+
+                                                            // ***************************************
+BOOL                                                        // Can the Type be represented in an Real
+IsRealType(TPDeclSpec Type) {                               // ***************************************
+    if (!Type) {
+        printf("IsRealType: Null.\n");
+        return FALSE;
+    }
+    switch (Type->Usage) {
+        case DecPtr:
+        case DecArray:
+        case DecFunc:   return FALSE;
+        case DecSpec:   return (Type->Use.DecSpec.Type &
+                                (TypeFLOAT|TypeDOUBLE));
+        case DecId: 
+        default:        printf("IsRealType: What Usage [%d].\n",Type->Usage);
+                        return FALSE;
+    }
+ }
+
+
+
+/* eof */
+
+
+
+

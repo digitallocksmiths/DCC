@@ -1,0 +1,639 @@
+; SKC AVR Output - V1(Jan  3 2020)
+
+#define		_IO_SPL	0x3D
+#define		_IO_SPH	0x3E
+
+                                                            ; ##########################
+                                                            ; # Start of CONST segment #
+                     .section    CONST, "a"                 ; ##########################
+
+                     .global   cRom
+cRom:                                                       ; char
+                     .byte     1                            ;           0x01 -> cRom
+
+                     .global   pcRomtoBss
+pcRomtoBss:                                                 ; constant pointer
+                     .word     0                            ;         0x0000 -> pcRomtoBss
+                     ;.endseg                               ; === End of CONST segment ===
+
+
+                                                            ; #########################
+                                                            ; # Start of INIT segment #
+                     .section    INIT,  "a"                 ; #########################
+                                                            ; This is the source of the initialization data
+;:                   cData                                  ; char
+                     .byte     1                            ;           0x01 -> cData
+;:                   sData                                  ; short 
+                     .word     2                            ;         0x0002 -> sData
+;:                   lData                                  ; long
+                     .long     3                            ;     0x00000003 -> lData
+;:                   pcData                                 ; (generic) pointer
+                     .word     336                          ;         0x0150 -> pcData
+;:                   psData                                 ; (generic) pointer
+                     .word     352                          ;         0x0160 -> psData
+;:                   plData                                 ; (generic) pointer
+                     .word     lData                        ;                -> plData
+                                                            ; #########################
+                     .section    .data                      ; # Start of DATA segment #
+                                                            ; #########################
+                                                            ; This is where the initialization data will be copied to
+
+                     .global   cData
+cData:               .space       1                         ; char
+
+                     .global   sData
+sData:               .space       2                         ; short 
+
+                     .global   lData
+lData:               .space       4                         ; long
+
+                     .global   pcData
+pcData:              .space       2                         ; (generic) pointer
+
+                     .global   psData
+psData:              .space       2                         ; (generic) pointer
+
+                     .global   plData
+plData:              .space       2                         ; (generic) pointer
+                     ;.endseg                               ; === End of DATA segment ===
+
+
+                                                            ; ########################
+                     .section    .bss                       ; # Start of BSS segment #
+                                                            ; ########################
+                                                            ; Here starts the uninitialized data
+
+                     .global   pcBss
+pcBss:               .space       2                         ; (generic) pointer
+
+                     .global   pcBsstoRom
+pcBsstoRom:          .space       2                         ; (generic) pointer
+
+                     .global   ppiData
+ppiData:             .space       2                         ; (generic) pointer
+                     ;.endseg                               ; === End of BSS segment ===
+
+
+                                                            ; #########################
+                     .section    .text                      ; # Start of TEXT segment #
+                                                            ; #########################
+                                                            ; Here starts the executable code
+
+                     .global   main
+main:                ; ###########################################
+                     ; # Function: main                     
+                     ; #   Return: unsigned int  (r4,r5)    
+                     ; #   Params: @Y+8  , lParam  size=4 long , Class[_____]
+                     ; #         : @Y+6  , iParam  size=2 int , Class[_____]
+                     ; #         : @Y+5  , cParam  size=1 char , Class[_____]
+                     ; #   CPU   : @Y+3, Return Address     
+                     ; #         : @Y+1, Preserved Frame Pointer
+                     ; #   Locals: <none>                   
+                     ; #         : sizeof(locals) = 0       
+                     ; ###########################################
+                     ; #### frame setup #########           ; 
+                     push      r29                          ;   2: (YH) preserve Frame
+                     push      r28                          ;   2: (YL)
+                     in        r29, _IO_SPH                 ;   1: FP <- SP
+                     in        r28, _IO_SPL                 ;   1:
+                     ; #### body text ###########           ; 
+                     ; ==== Compound Statement ============ ; L_compound_Id_000001
+                     ; ==== Expr Statement ================ ; 
+                     ldi       r30, lo8(cData)              ;   1: Z = &cData
+                     ldi       r31, hi8(cData)              ;   1: post inc
+                     ld        r4, Z                        ;   1:
+                     mov       r24, r4                      ;   1:
+                     inc       r24                          ;   1:
+                     st        Z, r24                       ;   1:
+                     ldi       r30, lo8(cData)              ;   1: Z = &cData
+                     ldi       r31, hi8(cData)              ;   1:
+                     st        Z, r4                        ;   1:
+                     ;      Expr end ------------           
+                     ; ==== Expr Statement ================ ; 
+                     ldi       r30, lo8(sData)              ;   1: Z = &sData
+                     ldi       r31, hi8(sData)              ;   1: post inc
+                     ld        r24, Z                       ;   1:
+                     ldd       r25, Z+1                     ;   2:
+                     movw      r4, r24                      ;   1:
+                     adiw      r24, 0x01                    ;   2:
+                     st        Z, r24                       ;   1:
+                     std       Z+1, r25                     ;   2:
+                     ldi       r30, lo8(cData)              ;   1: Z = &cData
+                     ldi       r31, hi8(cData)              ;   1:
+                     st        Z, r4                        ;   1:
+                     ;      Expr end ------------           
+                     ; ==== Expr Statement ================ ; 
+                     ldi       r30, lo8(lData)              ;   1: Z = &lData
+                     ldi       r31, hi8(lData)              ;   1: post inc
+                     ld        r22, Z                       ;   1:
+                     ldd       r23, Z+1                     ;   2:
+                     ldd       r24, Z+2                     ;   2:
+                     ldd       r25, Z+3                     ;   2:
+                     movw      r4, r22                      ;   1:
+                     movw      r6, r24                      ;   1:
+                     subi      r22, 0xff                    ;   1:
+                     sbci      r23, 0xff                    ;   1:
+                     sbci      r24, 0xff                    ;   1:
+                     sbci      r25, 0xff                    ;   1:
+                     st        Z, r22                       ;   1:
+                     std       Z+1, r23                     ;   2:
+                     std       Z+2, r24                     ;   2:
+                     std       Z+3, r25                     ;   2:
+                     ldi       r30, lo8(cData)              ;   1: Z = &cData
+                     ldi       r31, hi8(cData)              ;   1:
+                     st        Z, r4                        ;   1:
+                     ;      Expr end ------------           
+                     ; ==== Expr Statement ================ ; 
+                     ldd       r24, Y+5                     ;   2: cParam
+                     mov       r4, r24                      ;   1: post inc
+                     inc       r24                          ;   1:
+                     std       Y+5, r24                     ;   2:
+                     ldi       r30, lo8(cData)              ;   1: Z = &cData
+                     ldi       r31, hi8(cData)              ;   1:
+                     st        Z, r4                        ;   1:
+                     ;      Expr end ------------           
+                     ; ==== Expr Statement ================ ; 
+                     ldd       r24, Y+6                     ;   2: iParam
+                     ldd       r25, Y+7                     ;   2: post inc
+                     movw      r4, r24                      ;   1:
+                     adiw      r24, 0x01                    ;   1:
+                     std       Y+6, r24                     ;   2:
+                     std       Y+7, r25                     ;   2:
+                     ldi       r30, lo8(cData)              ;   1: Z = &cData
+                     ldi       r31, hi8(cData)              ;   1:
+                     st        Z, r4                        ;   1:
+                     ;      Expr end ------------           
+                     ; ==== Expr Statement ================ ; 
+                     ldd       r22, Y+8                     ;   2: lParam
+                     ldd       r23, Y+9                     ;   2: post inc
+                     ldd       r24, Y+10                    ;   2:
+                     ldd       r25, Y+11                    ;   2:
+                     movw      r4, r22                      ;   1:
+                     movw      r6, r24                      ;   1:
+                     subi      r22, 0xff                    ;   1:
+                     sbci      r23, 0xff                    ;   1:
+                     sbci      r24, 0xff                    ;   1:
+                     sbci      r25, 0xff                    ;   1:
+                     std       Y+8, r22                     ;   2:
+                     std       Y+9, r23                     ;   2:
+                     std       Y+10, r24                    ;   2:
+                     std       Y+11, r25                    ;   2:
+                     ldi       r30, lo8(cData)              ;   1: Z = &cData
+                     ldi       r31, hi8(cData)              ;   1:
+                     st        Z, r4                        ;   1:
+                     ;      Expr end ------------           
+                     ; ==== Expr Statement ================ ; 
+                     ldi       r30, lo8(cData)              ;   1: Z = &cData
+                     ldi       r31, hi8(cData)              ;   1: post dec
+                     ld        r4, Z                        ;   1:
+                     mov       r24, r4                      ;   1:
+                     dec       r24                          ;   1:
+                     ld        Z, r24                       ;   1:
+                     ldi       r30, lo8(cData)              ;   1: Z = &cData
+                     ldi       r31, hi8(cData)              ;   1:
+                     st        Z, r4                        ;   1:
+                     ;      Expr end ------------           
+                     ; ==== Expr Statement ================ ; 
+                     ldi       r30, lo8(sData)              ;   1: Z = &sData
+                     ldi       r31, hi8(sData)              ;   1: post dec
+                     ld        r24, Z                       ;   1:
+                     ldd       r25, Z+1                     ;   2:
+                     movw      r4, r24                      ;   1:
+                     sbiw      r24, 0x01                    ;   2:
+                     st        Z, r24                       ;   1:
+                     std       Z+1, r25                     ;   2:
+                     ldi       r30, lo8(cData)              ;   1: Z = &cData
+                     ldi       r31, hi8(cData)              ;   1:
+                     st        Z, r4                        ;   1:
+                     ;      Expr end ------------           
+                     ; ==== Expr Statement ================ ; 
+                     ldi       r30, lo8(lData)              ;   1: Z = &lData
+                     ldi       r31, hi8(lData)              ;   1: post dec
+                     ld        r22, Z                       ;   1:
+                     ldd       r23, Z+1                     ;   2:
+                     ldd       r24, Z+2                     ;   2:
+                     ldd       r25, Z+3                     ;   2:
+                     movw      r4, r22                      ;   1:
+                     movw      r6, r24                      ;   1:
+                     subi      r22, 0x01                    ;   1:
+                     sbci      r23, 0x00                    ;   1:
+                     sbci      r24, 0x00                    ;   1:
+                     sbci      r25, 0x00                    ;   1:
+                     st        Z, r22                       ;   1:
+                     std       Z+1, r23                     ;   2:
+                     std       Z+2, r24                     ;   2:
+                     std       Z+3, r25                     ;   2:
+                     ldi       r30, lo8(cData)              ;   1: Z = &cData
+                     ldi       r31, hi8(cData)              ;   1:
+                     st        Z, r4                        ;   1:
+                     ;      Expr end ------------           
+                     ; ==== Expr Statement ================ ; 
+                     ldd       r24, Y+5                     ;   2: cParam
+                     mov       r4, r24                      ;   1: post dec
+                     dec       r24                          ;   1:
+                     std       Y+5, r24                     ;   2:
+                     ldi       r30, lo8(cData)              ;   1: Z = &cData
+                     ldi       r31, hi8(cData)              ;   1:
+                     st        Z, r4                        ;   1:
+                     ;      Expr end ------------           
+                     ; ==== Expr Statement ================ ; 
+                     ldd       r24, Y+6                     ;   2: iParam
+                     ldd       r25, Y+7                     ;   2: post dec
+                     movw      r4, r24                      ;   1:
+                     sbiw      r24, 0x01                    ;   1:
+                     std       Y+6, r24                     ;   2:
+                     std       Y+7, r25                     ;   2:
+                     ldi       r30, lo8(cData)              ;   1: Z = &cData
+                     ldi       r31, hi8(cData)              ;   1:
+                     st        Z, r4                        ;   1:
+                     ;      Expr end ------------           
+                     ; ==== Expr Statement ================ ; 
+                     ldd       r22, Y+8                     ;   2: lParam
+                     ldd       r23, Y+9                     ;   2: post dec
+                     ldd       r24, Y+10                    ;   2:
+                     ldd       r25, Y+11                    ;   2:
+                     movw      r4, r22                      ;   1:
+                     movw      r6, r24                      ;   1:
+                     subi      r22, 0x01                    ;   1:
+                     sbci      r23, 0x00                    ;   1:
+                     sbci      r24, 0x00                    ;   1:
+                     sbci      r25, 0x00                    ;   1:
+                     std       Y+8, r22                     ;   2:
+                     std       Y+9, r23                     ;   2:
+                     std       Y+10, r24                    ;   2:
+                     std       Y+11, r25                    ;   2:
+                     ldi       r30, lo8(cData)              ;   1: Z = &cData
+                     ldi       r31, hi8(cData)              ;   1:
+                     st        Z, r4                        ;   1:
+                     ;      Expr end ------------           
+                     ; ==== Expr Statement ================ ; 
+                     ldi       r30, lo8(cData)              ;   1: Z = &cData
+                     ldi       r31, hi8(cData)              ;   1: pre inc
+                     ld        r4, Z                        ;   1:
+                     inc       r4                           ;   1:
+                     ld        Z, r4                        ;   1:
+                     ldi       r30, lo8(cData)              ;   1: Z = &cData
+                     ldi       r31, hi8(cData)              ;   1:
+                     st        Z, r4                        ;   1:
+                     ;      Expr end ------------           
+                     ; ==== Expr Statement ================ ; 
+                     ldi       r30, lo8(sData)              ;   1: Z = &sData
+                     ldi       r31, hi8(sData)              ;   1: pre inc
+                     ld        r24, Z                       ;   1:
+                     ldd       r25, Z+1                     ;   2:
+                     adiw      r24, 0x01                    ;   2:
+                     st        Z, r24                       ;   1:
+                     std       Z+1, r25                     ;   2:
+                     movw      r4, r24                      ;   1:
+                     ldi       r30, lo8(cData)              ;   1: Z = &cData
+                     ldi       r31, hi8(cData)              ;   1:
+                     st        Z, r4                        ;   1:
+                     ;      Expr end ------------           
+                     ; ==== Expr Statement ================ ; 
+                     ldi       r30, lo8(lData)              ;   1: Z = &lData
+                     ldi       r31, hi8(lData)              ;   1: pre inc
+                     ld        r22, Z                       ;   1:
+                     ldd       r23, Z+1                     ;   2:
+                     ldd       r24, Z+2                     ;   2:
+                     ldd       r25, Z+3                     ;   2:
+                     subi      r22, 0xff                    ;   1:
+                     sbci      r23, 0xff                    ;   1:
+                     sbci      r24, 0xff                    ;   1:
+                     sbci      r25, 0xff                    ;   1:
+                     st        Z, r22                       ;   1:
+                     std       Z+1, r23                     ;   2:
+                     std       Z+2, r24                     ;   2:
+                     std       Z+3, r25                     ;   2:
+                     movw      r4, r22                      ;   1:
+                     movw      r6, r24                      ;   1:
+                     ldi       r30, lo8(cData)              ;   1: Z = &cData
+                     ldi       r31, hi8(cData)              ;   1:
+                     st        Z, r4                        ;   1:
+                     ;      Expr end ------------           
+                     ; ==== Expr Statement ================ ; 
+                     ldd       r4, Y+5                      ;   2: cParam
+                     inc       r4                           ;   1: pre inc
+                     std       Y+5, r24                     ;   2:
+                     ldi       r30, lo8(cData)              ;   1: Z = &cData
+                     ldi       r31, hi8(cData)              ;   1:
+                     st        Z, r4                        ;   1:
+                     ;      Expr end ------------           
+                     ; ==== Expr Statement ================ ; 
+                     ldd       r24, Y+6                     ;   2: iParam
+                     ldd       r25, Y+7                     ;   2: pre inc
+                     adiw      r24, 0x01                    ;   1:
+                     std       Y+6, r24                     ;   2:
+                     std       Y+7, r25                     ;   2:
+                     movw      r4, r24                      ;   1:
+                     ldi       r30, lo8(cData)              ;   1: Z = &cData
+                     ldi       r31, hi8(cData)              ;   1:
+                     st        Z, r4                        ;   1:
+                     ;      Expr end ------------           
+                     ; ==== Expr Statement ================ ; 
+                     ldd       r22, Y+8                     ;   2: lParam
+                     ldd       r23, Y+9                     ;   2: pre inc
+                     ldd       r24, Y+10                    ;   2:
+                     ldd       r25, Y+11                    ;   2:
+                     subi      r22, 0xff                    ;   1:
+                     sbci      r23, 0xff                    ;   1:
+                     sbci      r24, 0xff                    ;   1:
+                     sbci      r25, 0xff                    ;   1:
+                     std       Y+8, r22                     ;   2:
+                     std       Y+9, r23                     ;   2:
+                     std       Y+10, r24                    ;   2:
+                     std       Y+11, r25                    ;   2:
+                     movw      r4, r22                      ;   1:
+                     movw      r6, r24                      ;   1:
+                     ldi       r30, lo8(cData)              ;   1: Z = &cData
+                     ldi       r31, hi8(cData)              ;   1:
+                     st        Z, r4                        ;   1:
+                     ;      Expr end ------------           
+                     ; ==== Expr Statement ================ ; 
+                     ldi       r30, lo8(cData)              ;   1: Z = &cData
+                     ldi       r31, hi8(cData)              ;   1: pre dec
+                     ld        r4, Z                        ;   1:
+                     dec       r4                           ;   1:
+                     ld        Z, r4                        ;   1:
+                     ldi       r30, lo8(cData)              ;   1: Z = &cData
+                     ldi       r31, hi8(cData)              ;   1:
+                     st        Z, r4                        ;   1:
+                     ;      Expr end ------------           
+                     ; ==== Expr Statement ================ ; 
+                     ldi       r30, lo8(sData)              ;   1: Z = &sData
+                     ldi       r31, hi8(sData)              ;   1: pre dec
+                     ld        r24, Z                       ;   1:
+                     ldd       r26, Z+1                     ;   2:
+                     sbiw      r24, 0x01                    ;   2:
+                     st        Z, r24                       ;   1:
+                     std       Z+1, r25                     ;   2:
+                     movw      r4, r24                      ;   1:
+                     ldi       r30, lo8(cData)              ;   1: Z = &cData
+                     ldi       r31, hi8(cData)              ;   1:
+                     st        Z, r4                        ;   1:
+                     ;      Expr end ------------           
+                     ; ==== Expr Statement ================ ; 
+                     ldi       r30, lo8(lData)              ;   1: Z = &lData
+                     ldi       r31, hi8(lData)              ;   1: pre dec
+                     ld        r22, Z                       ;   1:
+                     ldd       r23, Z+1                     ;   2:
+                     ldd       r24, Z+2                     ;   2:
+                     ldd       r25, Z+3                     ;   2:
+                     subi      r22, 0x01                    ;   1:
+                     sbci      r23, 0x00                    ;   1:
+                     sbci      r24, 0x00                    ;   1:
+                     sbci      r25, 0x00                    ;   1:
+                     st        Z, r22                       ;   1:
+                     std       Z+1, r23                     ;   2:
+                     std       Z+2, r24                     ;   2:
+                     std       Z+3, r25                     ;   2:
+                     movw      r4, r22                      ;   1:
+                     movw      r6, r24                      ;   1:
+                     ldi       r30, lo8(cData)              ;   1: Z = &cData
+                     ldi       r31, hi8(cData)              ;   1:
+                     st        Z, r4                        ;   1:
+                     ;      Expr end ------------           
+                     ; ==== Expr Statement ================ ; 
+                     ldd       r4, Y+5                      ;   2: cParam
+                     dec       r4                           ;   1: pre dec
+                     std       Y+5, r24                     ;   2:
+                     ldi       r30, lo8(cData)              ;   1: Z = &cData
+                     ldi       r31, hi8(cData)              ;   1:
+                     st        Z, r4                        ;   1:
+                     ;      Expr end ------------           
+                     ; ==== Expr Statement ================ ; 
+                     ldd       r24, Y+6                     ;   2: iParam
+                     ldd       r25, Y+7                     ;   2: pre dec
+                     sbiw      r24, 0x01                    ;   1:
+                     std       Y+6, r24                     ;   2:
+                     std       Y+7, r25                     ;   2:
+                     movw      r4, r24                      ;   1:
+                     ldi       r30, lo8(cData)              ;   1: Z = &cData
+                     ldi       r31, hi8(cData)              ;   1:
+                     st        Z, r4                        ;   1:
+                     ;      Expr end ------------           
+                     ; ==== Expr Statement ================ ; 
+                     ldd       r22, Y+8                     ;   2: lParam
+                     ldd       r23, Y+9                     ;   2: pre dec
+                     ldd       r24, Y+10                    ;   2:
+                     ldd       r25, Y+11                    ;   2:
+                     subi      r22, 0x01                    ;   1:
+                     sbci      r23, 0x00                    ;   1:
+                     sbci      r24, 0x00                    ;   1:
+                     sbci      r25, 0x00                    ;   1:
+                     std       Y+8, r22                     ;   2:
+                     std       Y+9, r23                     ;   2:
+                     std       Y+10, r24                    ;   2:
+                     std       Y+11, r25                    ;   2:
+                     movw      r4, r22                      ;   1:
+                     movw      r6, r24                      ;   1:
+                     ldi       r30, lo8(cData)              ;   1: Z = &cData
+                     ldi       r31, hi8(cData)              ;   1:
+                     st        Z, r4                        ;   1:
+                     ;      Expr end ------------           
+                     ; ==== Expr Statement ================ ; 
+                     ldi       r30, lo8(pcData)             ;   1: Z = &pcData
+                     ldi       r31, hi8(pcData)             ;   1: post inc
+                     ld        r24, Z                       ;   1:
+                     ldd       r25, Z+1                     ;   2:
+                     movw      r4, r24                      ;   1:
+                     adiw      r24, 0x01                    ;   2:
+                     st        Z, r24                       ;   1:
+                     std       Z+1, r25                     ;   2:
+                     movw      r30, r4                      ;   1: de-ref pointer
+                     ld        r4, Z                        ;   1: data is in RAM
+                     ldi       r30, lo8(cData)              ;   1: Z = &cData
+                     ldi       r31, hi8(cData)              ;   1:
+                     st        Z, r4                        ;   1:
+                     ;      Expr end ------------           
+                     ; ==== Expr Statement ================ ; 
+                     ldi       r30, lo8(psData)             ;   1: Z = &psData
+                     ldi       r31, hi8(psData)             ;   1: post inc
+                     ld        r24, Z                       ;   1:
+                     ldd       r25, Z+1                     ;   2:
+                     movw      r4, r24                      ;   1:
+                     adiw      r24, 0x01                    ;   2:
+                     st        Z, r24                       ;   1:
+                     std       Z+1, r25                     ;   2:
+                     movw      r30, r4                      ;   1: de-ref pointer
+                     ld        r4, Z                        ;   1: data is in RAM
+                     ldd       r5, Z+1                      ;   2:
+                     ldi       r30, lo8(sData)              ;   1: Z = &sData
+                     ldi       r31, hi8(sData)              ;   1:
+                     st        Z, r4                        ;   1:
+                     std       Z+1, r5                      ;   2:
+                     ;      Expr end ------------           
+                     ; ==== Expr Statement ================ ; 
+                     ldi       r30, lo8(plData)             ;   1: Z = &plData
+                     ldi       r31, hi8(plData)             ;   1:
+                     ld        r4, Z                        ;   1:
+                     ldd       r5, Z+1                      ;   2:
+                     movw      r30, r4                      ;   1: de-ref pointer
+                     ld        r4, Z                        ;   1: data is in RAM
+                     ldd       r5, Z+1                      ;   2:
+                     ldd       r6, Z+2                      ;   2:
+                     ldd       r7, Z+3                      ;   2:
+                     movw      r24, r4                      ;   1: post increment 32
+                     movw      r26, r6                      ;   1:
+                     subi      r24, 0xff                    ;   1:
+                     sbci      r25, 0xff                    ;   1:
+                     sbci      r26, 0xff                    ;   1:
+                     sbci      r27, 0xff                    ;   1:
+                     st        Z, r24                       ;   1:
+                     std       Z+1, r25                     ;   2:
+                     std       Z+2, r26                     ;   2:
+                     std       Z+3, r27                     ;   2:
+                     ldi       r30, lo8(lData)              ;   1: Z = &lData
+                     ldi       r31, hi8(lData)              ;   1:
+                     st        Z, r4                        ;   1:
+                     std       Z+1, r5                      ;   2:
+                     std       Z+2, r6                      ;   2:
+                     std       Z+3, r7                      ;   2:
+                     ;      Expr end ------------           
+                     ; ==== Expr Statement ================ ; 
+                     ldi       r30, lo8(plData)             ;   1: Z = &plData
+                     ldi       r31, hi8(plData)             ;   1:
+                     ld        r4, Z                        ;   1:
+                     ldd       r5, Z+1                      ;   2:
+                     movw      r30, r4                      ;   1: de-ref pointer
+                     ld        r24, Z                       ;   1: data is in RAM
+                     ldd       r25, Z+1                     ;   2: pre increment 32
+                     ldd       r26, Z+2                     ;   2:
+                     ldd       r27, Z+3                     ;   2:
+                     subi      r24, 0xff                    ;   1:
+                     sbci      r25, 0xff                    ;   1:
+                     sbci      r26, 0xff                    ;   1:
+                     sbci      r27, 0xff                    ;   1:
+                     st        Z, r24                       ;   1:
+                     std       Z+1, r25                     ;   2:
+                     std       Z+2, r26                     ;   2:
+                     std       Z+3, r27                     ;   2:
+                     movw      r4, r24                      ;   1:
+                     movw      r6, r26                      ;   1:
+                     ldi       r30, lo8(lData)              ;   1: Z = &lData
+                     ldi       r31, hi8(lData)              ;   1:
+                     st        Z, r4                        ;   1:
+                     std       Z+1, r5                      ;   2:
+                     std       Z+2, r6                      ;   2:
+                     std       Z+3, r7                      ;   2:
+                     ;      Expr end ------------           
+                     ; ==== Expr Statement ================ ; 
+                     ldi       r30, lo8(plData)             ;   1: Z = &plData
+                     ldi       r31, hi8(plData)             ;   1:
+                     ld        r4, Z                        ;   1:
+                     ldd       r5, Z+1                      ;   2:
+                     movw      r30, r4                      ;   1: de-ref pointer
+                     ld        r4, Z                        ;   1: data is in RAM
+                     ldd       r5, Z+1                      ;   2:
+                     ldd       r6, Z+2                      ;   2:
+                     ldd       r7, Z+3                      ;   2:
+                     movw      r24, r4                      ;   1: post decrement 32
+                     movw      r26, r6                      ;   1:
+                     subi      r24, 0x01                    ;   1:
+                     sbci      r25, 0x00                    ;   1:
+                     sbci      r26, 0x00                    ;   1:
+                     sbci      r27, 0x00                    ;   1:
+                     st        Z, r24                       ;   1:
+                     std       Z+1, r25                     ;   2:
+                     std       Z+2, r26                     ;   2:
+                     std       Z+3, r27                     ;   2:
+                     ldi       r30, lo8(lData)              ;   1: Z = &lData
+                     ldi       r31, hi8(lData)              ;   1:
+                     st        Z, r4                        ;   1:
+                     std       Z+1, r5                      ;   2:
+                     std       Z+2, r6                      ;   2:
+                     std       Z+3, r7                      ;   2:
+                     ;      Expr end ------------           
+                     ; ==== Expr Statement ================ ; 
+                     ldi       r30, lo8(plData)             ;   1: Z = &plData
+                     ldi       r31, hi8(plData)             ;   1:
+                     ld        r4, Z                        ;   1:
+                     ldd       r5, Z+1                      ;   2:
+                     movw      r30, r4                      ;   1: de-ref pointer
+                     ld        r24, Z                       ;   1: data is in RAM
+                     ldd       r25, Z+1                     ;   2: pre decrement 32
+                     ldd       r26, Z+2                     ;   2:
+                     ldd       r27, Z+3                     ;   2:
+                     subi      r24, 0x01                    ;   1:
+                     sbci      r25, 0x00                    ;   1:
+                     sbci      r26, 0x00                    ;   1:
+                     sbci      r27, 0x00                    ;   1:
+                     st        Z, r24                       ;   1:
+                     std       Z+1, r25                     ;   2:
+                     std       Z+2, r26                     ;   2:
+                     std       Z+3, r27                     ;   2:
+                     movw      r4, r24                      ;   1:
+                     movw      r6, r26                      ;   1:
+                     ldi       r30, lo8(lData)              ;   1: Z = &lData
+                     ldi       r31, hi8(lData)              ;   1:
+                     st        Z, r4                        ;   1:
+                     std       Z+1, r5                      ;   2:
+                     std       Z+2, r6                      ;   2:
+                     std       Z+3, r7                      ;   2:
+                     ;      Expr end ------------           
+                     ; ==== Expr Statement ================ ; 
+                     ldi       r30, lo8(psData)             ;   1: Z = &psData
+                     ldi       r31, hi8(psData)             ;   1: post inc
+                     ld        r24, Z                       ;   1:
+                     ldd       r25, Z+1                     ;   2:
+                     movw      r4, r24                      ;   1:
+                     adiw      r24, 0x01                    ;   2:
+                     st        Z, r24                       ;   1:
+                     std       Z+1, r25                     ;   2:
+                     movw      r30, r4                      ;   1: de-ref pointer
+                     ld        r4, Z                        ;   1: data is in RAM
+                     ldd       r5, Z+1                      ;   2:
+                     ldi       r30, lo8(pcData)             ;   1: Z = &pcData
+                     ldi       r31, hi8(pcData)             ;   1: post inc
+                     ld        r24, Z                       ;   1:
+                     ldd       r25, Z+1                     ;   2:
+                     mov       r5, r24                      ;   1:
+                     mov       r6, r25                      ;   1:
+                     adiw      r24, 0x01                    ;   2:
+                     st        Z, r24                       ;   1:
+                     std       Z+1, r25                     ;   2:
+                     mov       r30, r5                      ;   1: pointer to store
+                     mov       r31, r6                      ;   1:
+                     st        Z, r4                        ;   1:
+                     ;      Expr end ------------           
+                     ; ==== Expr Statement ================ ; 
+                     ldi       r26, 0x2a                    ;   1: const 42
+                     mov       r4, r26                      ;   1:
+                     ldi       r26, 0x64                    ;   1: const 100
+                     ldi       r27, 0x00                    ;   1:
+                     mov       r5, r26                      ;   1:
+                     mov       r6, r27                      ;   1:
+                     mov       r30, r5                      ;   1: pointer to store
+                     mov       r31, r6                      ;   1:
+                     st        Z, r4                        ;   1:
+                     ;      Expr end ------------           
+                     ; ==== Expr Statement ================ ; 
+                     ldi       r26, 0x64                    ;   1: const 100
+                     ldi       r27, 0x00                    ;   1:
+                     movw      r4, r26                      ;   1:
+                     movw      r30, r4                      ;   1: de-ref pointer
+                     ld        r4, Z                        ;   1: data is in RAM
+                     mov       r5, r4                       ;   1: post increment 8
+                     inc       r5                           ;   1:
+                     st        Z, r5                        ;   1:
+                     ldi       r30, lo8(cData)              ;   1: Z = &cData
+                     ldi       r31, hi8(cData)              ;   1:
+                     st        Z, r4                        ;   1:
+                     ;      Expr end ------------           
+                     ;      Compound End --------           ; L_compound_Id_000001
+                     ; #### exit ################           ; 
+L_Exit_000000:       adiw      r28, 0                       ;   2: Y += sizeof(locals)
+                     out       _IO_SPH, r29                 ;   1: SP <- Y
+                     out       _IO_SPL, r28                 ;   1:
+                     pop       r28                          ;   2: FP <- preserved Frame
+                     pop       r29                          ;   2: 
+                     ret                                    ;   4: 
+                     
+         
+                            
+                     ;.endseg                               ; === End of TEXT segment ===
+
+
+
+                     .end                                   ; End of generated code.
+
+; eof

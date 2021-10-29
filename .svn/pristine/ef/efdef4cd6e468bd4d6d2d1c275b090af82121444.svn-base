@@ -1,0 +1,32 @@
+// # $URL: https://eboracum-vss.digitallocksmiths.local/svn/Dls/Sean/RoyalHolloway/CC_Avr/Source/GenExpression.h $
+// # $Revision: 387 $
+
+
+#ifndef __SKC_GEN_MEMORY_ACCESS_H__
+#define __SKC_GEN_MEMORY_ACCESS_H__
+
+#ifdef DEBUG_INCLUDE_FILES 
+#pragma message("     including " __FILE__)
+#endif // DEBUG_INCLUDE_FILES
+
+
+typedef enum {                      // Read/write access to...
+    ACCESS_REG,                     //    Register
+    ACCESS_GLOBAL,                  //    global symbol
+    ACCESS_FRAME,                   //    local or parameter variable.
+    ACCESS_POINTER,                 //    A pointer has been collected into Z ready to be de-referenced.
+    ACCESS_ROM                      //    A pointer has been collected into Z ready to be de-referenced.
+} TMemAccess;
+
+
+TMemAccess FetchOptions(int iReg, TPExprNode pExpr, LPSTR * ppszVar, int * piDisplacement);
+void       FetchLoad(TMemAccess Z, int iReg, int iVarSize, LPSTR pszMem, int iDisp);
+void       FetchStore(TMemAccess Z, int iReg, int iVarSize, LPSTR pszMem, int iDisp);
+
+
+
+#endif // __SKC_GEN_MEMORY_ACCESS_H__
+
+/* eof */
+
+

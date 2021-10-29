@@ -1,0 +1,43 @@
+
+// long foo(int a) {
+//    return a++;
+// }
+
+//void bar1(int a) {
+//    return a++;
+//}
+//
+//int bar2(int a) {
+//    return;
+//}
+
+//char * bar3(char a) {
+//    return a;
+//}
+
+// bar4(long a) {
+//     return a;
+// }
+
+// void main(void) {
+//     int a;
+// //    a = foo(a);
+// }
+
+int foo(long a, char b, ...) {
+    return a+1;
+}
+
+int p1, p2, p3;
+
+void main(void) {
+//    foo;
+//    foo();
+    foo(p1);
+    foo(p1,p2);
+    foo(p1,p2,p3);
+    foo(p1,p2,p3, 22);
+}
+
+
+

@@ -1,0 +1,20 @@
+/* ******* */
+/*  lex.h  */
+/* ******* */
+
+#define LINESIZE 256			// max text line size.
+
+LPVOID	New(INT n);
+void	Dispose(LPVOID n);
+
+BOOL	StartInput(LPSTR Name);
+BOOL	EndInput(void);
+int     yylex(void);
+
+extern  DWORD   LineNo;
+extern  DWORD   LinePos;
+extern  CHAR    CurrentLine[LINESIZE];
+extern  CHAR    PreviousLine[LINESIZE];
+
+/* eof */
+
