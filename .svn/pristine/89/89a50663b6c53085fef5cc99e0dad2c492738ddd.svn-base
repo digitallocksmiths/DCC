@@ -1,9 +1,0 @@
-﻿  Main.c
-  Todo: Declaration function names to start with Decl?
-  Todo: Local and parameters:  read and write need immeadiate or direct indication (ld r0,a or ld r0,#a.
-  Todo: Local and parameters:  unused variable warnings.
-  Todo: Local and parameters:  read before set warnings.
-  Todo: Local variables and parameters. how to find them when parsing expressions.
-  Todo: Local variables. generate expression code.
-  CC_Avr.vcxproj -> D:\DL\sean\RoyalHolloway\2019\CC_Avr\Debug\CC_Avr.exe
-  CC_Avr.vcxproj -> D:\DL\sean\RoyalHolloway\2019\CC_Avr\Debug\CC_Avr.pdb (Full PDB)

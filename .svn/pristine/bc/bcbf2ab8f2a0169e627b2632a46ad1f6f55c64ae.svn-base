@@ -1,6 +1,0 @@
-
-typedef unsigned short u16;
-
-extern u16     ANA_STAT;
-
-u16     ANA_STAT = 0x8000;                     // sle register
