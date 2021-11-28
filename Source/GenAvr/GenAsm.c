@@ -99,9 +99,11 @@ LPSTR OperandStrDispReg(LPSTR pszStr, int iDisp, int iR1) {
 
 LPSTR OperandRegDisp(int iR1, LPSTR pszStr, int iDisp) {
     static char caRegVal[128];
-
     if (iDisp > 63) {
-        Error(ERRORX, "OperandRegDisp(): Local variable displacment is > 63. No can do.");
+        // Error(ERRORX, "OperandRegDisp(): Local variable displacment is > 63. No can do.");
+#pragma message("    **** DEBUG:   Fudge for massive frames. generates faulty code!")
+        Error(WARNINGX, "OperandRegDisp(): Local variable displacment is > 63. No can do.");
+        iDisp = 63;
     }
     sprintf_s(caRegVal, sizeof(caRegVal), "r%d, %s+%d", iR1, pszStr, iDisp);
     return caRegVal;
@@ -110,7 +112,10 @@ LPSTR OperandRegDisp(int iR1, LPSTR pszStr, int iDisp) {
 LPSTR OperandDispReg(LPSTR pszStr, int iDisp, int iR1) {
     static char caValReg[128];
     if (iDisp > 63) {
-        Error(ERRORX, "OperandDispReg(): Local variable displacment is > 64. No can do.");
+        // Error(ERRORX, "OperandDispReg(): Local variable displacment is > 64. No can do.");
+#pragma message("    **** DEBUG:   Fudge for massive frames. generates faulty code!")
+        Error(WARNINGX, "OperandDispReg(): Local variable displacment is > 64. No can do.");
+        iDisp = 63;
     }
     sprintf_s(caValReg, sizeof(caValReg), "%s+%d, r%d", pszStr, iDisp, iR1);
     return caValReg;

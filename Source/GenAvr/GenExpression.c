@@ -2891,22 +2891,22 @@ static void FlagConditionalCommonExit(LPSTR pzsTrue, LPSTR pszFalse) {
     if  (pzsTrue != NULL) { 
         GenAsm("", "brne", pzsTrue, "1/2: branch if TRUE"); 
     }
-    else { 
-        pszTmpLabel = GenLabel("_IfTrue_");
-        GenAsm("", "brne", pszTmpLabel, "1/2: branch if TRUE (defended fall through)");
-    }
+//    else { 
+//        pszTmpLabel = GenLabel("_IfTrue_");
+//        GenAsm("", "brne", pszTmpLabel, "1/2: branch if TRUE (defended fall through)");
+//    }
     if (pszFalse != NULL) { 
         GenAsm("", "breq", pszFalse, "1/2: branch if FALSE"); 
     }
-    else {
-        pszTmpLabel = GenLabel("_IfFalse_");
-        GenAsm("", "breq", pszTmpLabel, "1/2: branch if FALSE (defended fall through)");
-    }
+//    else {
+//        pszTmpLabel = GenLabel("_IfFalse_");
+//        GenAsm("", "breq", pszTmpLabel, "1/2: branch if FALSE (defended fall through)");
+//    }
     
-    if (pszTmpLabel != NULL) {
-        GenAsm(pszTmpLabel, "", "", "   : Defended fall through");
-        Dispose(pszTmpLabel);
-    }
+//    if (pszTmpLabel != NULL) {
+//        GenAsm(pszTmpLabel, "", "", "   : Defended fall through");
+//        Dispose(pszTmpLabel);
+//    }
 
     return;
 }
