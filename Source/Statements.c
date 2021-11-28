@@ -12,7 +12,6 @@
 #include "lex.h"
 #include "typectrl.h"
 #include "expr.h"
-//#include "Gen.h"
 #include "Statements.h"
 #include "main.h"
 
